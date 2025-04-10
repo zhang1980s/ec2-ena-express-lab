@@ -32,7 +32,7 @@ export class Ec2EnaExpressLabStack extends cdk.Stack {
     const securityGroup = new ec2.SecurityGroup(this, 'EnaExpressSecurityGroup', {
       vpc,
       description: 'Security group for ENA Express testing',
-      allowAllOutbound: false,
+      allowAllOutbound: true, // Allow all outbound traffic by default
     });
 
     // Inbound: allow all traffic from the security group itself
@@ -49,19 +49,8 @@ export class Ec2EnaExpressLabStack extends cdk.Stack {
       'Allow SSH access from anywhere'
     );
 
-    // Outbound: allow all traffic to the security group itself
-    securityGroup.addEgressRule(
-      securityGroup,
-      ec2.Port.allTraffic(),
-      'Allow all traffic to the security group itself'
-    );
-
-    // Outbound: allow all traffic to 0.0.0.0/0
-    securityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.allTraffic(),
-      'Allow all outbound traffic'
-    );
+    // Outbound: allow all traffic to the security group itself is already covered by allowAllOutbound: true
+    // The default behavior with allowAllOutbound: true already allows all outbound traffic to 0.0.0.0/0
 
     // 8. Create EC2 role for Systems Manager access
     const ec2Role = new iam.Role(this, 'EC2SSMRole', {
