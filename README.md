@@ -78,7 +78,7 @@ Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
 
 ### Network Interface Configuration
 - Primary ENI: Standard ENA configuration
-- Secondary ENI: ENA Express and ENA Express UDP enabled
+- Secondary ENI: Requires enabling ENA Express after deployment (see Post-Deployment Steps)
 
 ### Access Management
 - IAM role with Systems Manager access for remote management
@@ -141,6 +141,39 @@ Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
    ```bash
    # Example using SCP
    scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
+   ```
+
+### Post-Deployment Steps
+
+After deploying the infrastructure, you need to enable ENA Express on the secondary ENIs:
+
+1. Note the secondary ENI IDs from the stack outputs:
+   ```bash
+   aws cloudformation describe-stacks --stack-name Ec2EnaExpressLabStack --query "Stacks[0].Outputs[?starts_with(OutputKey, 'SecondaryENI')].{Key:OutputKey,Value:OutputValue}" --output table
+   ```
+
+2. Enable ENA Express and ENA Express UDP on each secondary ENI:
+   ```bash
+   aws ec2 modify-network-interface-attribute \
+     --network-interface-id <eni-id> \
+     --ena-srd-specification 'EnaSrdEnabled=true,EnaSrdUdpSpecification={EnaSrdUdpEnabled=true}'
+   ```
+
+3. Verify that ENA Express is enabled:
+   ```bash
+   aws ec2 describe-network-interfaces \
+     --network-interface-ids <eni-id> \
+     --query 'NetworkInterfaces[0].EnaSrdSpecification'
+   ```
+
+   The output should show:
+   ```json
+   {
+     "EnaSrdEnabled": true,
+     "EnaSrdUdpSpecification": {
+       "EnaSrdUdpEnabled": true
+     }
+   }
    ```
 
 ## Testing Methodology
