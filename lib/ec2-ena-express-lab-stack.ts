@@ -74,20 +74,17 @@ export class Ec2EnaExpressLabStack extends cdk.Stack {
         description: `Primary ENI for instance ${i}`,
       });
 
-      // 7. Create second ENI with ENA Express and ENA Express UDP enabled
+      // 7. Create second ENI (ENA Express will be enabled after deployment)
       const secondaryEni = new ec2.CfnNetworkInterface(this, `SecondaryENI${i}`, {
         subnetId: publicSubnet.subnetId,
         groupSet: [securityGroup.securityGroupId],
-        description: `Secondary ENI with ENA Express for instance ${i}`,
+        description: `Secondary ENI for instance ${i} (Enable ENA Express after deployment)`,
       });
       
-      // Add ENA Express configuration using property override
-      secondaryEni.addPropertyOverride('EnaSrdSpecification', {
-        EnaSrdEnabled: true,
-        EnaSrdUdpSpecification: {
-          EnaSrdUdpEnabled: true,
-        },
-      });
+      // Note: ENA Express (EnaSrdSpecification) is not directly supported in CDK's CfnNetworkInterface
+      // It needs to be enabled after deployment using the AWS CLI:
+      // aws ec2 modify-network-interface-attribute --network-interface-id <eni-id> \
+      //   --ena-srd-specification 'EnaSrdEnabled=true,EnaSrdUdpSpecification={EnaSrdUdpEnabled=true}'
 
       // 3. Create EC2 instance (c6i.8xlarge) in the placement group
       const instance = new ec2.CfnInstance(this, `EnaExpressInstance${i}`, {
@@ -142,5 +139,13 @@ export class Ec2EnaExpressLabStack extends cdk.Stack {
       value: placementGroup.ref,
       description: 'Placement Group Name',
     });
+    
+    // Output the secondary ENI IDs for enabling ENA Express after deployment
+    for (let i = 1; i <= 2; i++) {
+      new cdk.CfnOutput(this, `SecondaryENI${i}Id`, {
+        value: cdk.Fn.ref(`SecondaryENI${i}`),
+        description: `Secondary ENI ${i} ID (Enable ENA Express on this ENI after deployment)`,
+      });
+    }
   }
 }
