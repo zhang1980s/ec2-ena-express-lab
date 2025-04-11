@@ -14,7 +14,7 @@ const networking = new Networking("networking", {
 // Create compute resources
 const compute = new Compute("compute", {
     stackName: enaExpressLabConfig.stackName,
-    subnetId: networking.subnet.id,
+    subnetId: networking.subnets[0].id,
     securityGroupId: networking.securityGroup.id,
     instanceType: enaExpressLabConfig.instanceType,
     keyPairName: enaExpressLabConfig.keyPairName,
@@ -27,7 +27,7 @@ if (enaExpressLabConfig.deployMonitoring) {
     monitoring = new Monitoring("monitoring", {
         stackName: enaExpressLabConfig.stackName,
         vpcId: networking.vpc.id,
-        subnetIds: [networking.subnet.id],
+        subnetIds: networking.subnets.map(subnet => subnet.id),
         grafanaPassword: enaExpressLabConfig.grafanaPassword,
         testInstanceIps: compute.instances.map(instance => instance.publicIp),
     });
@@ -35,7 +35,7 @@ if (enaExpressLabConfig.deployMonitoring) {
 
 // Export outputs
 export const vpcId = networking.vpc.id;
-export const subnetId = networking.subnet.id;
+export const subnetIds = pulumi.output(networking.subnets).apply(subnets => subnets.map(subnet => subnet.id));
 export const securityGroupId = networking.securityGroup.id;
 export const placementGroupId = compute.placementGroup.id;
 export const instanceIds = pulumi.output(compute.instances).apply(instances => 

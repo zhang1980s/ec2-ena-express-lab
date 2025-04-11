@@ -9,7 +9,7 @@ export interface NetworkingArgs {
 
 export class Networking extends pulumi.ComponentResource {
     public readonly vpc: aws.ec2.Vpc;
-    public readonly subnet: aws.ec2.Subnet;
+    public readonly subnets: aws.ec2.Subnet[];
     public readonly internetGateway: aws.ec2.InternetGateway;
     public readonly routeTable: aws.ec2.RouteTable;
     public readonly securityGroup: aws.ec2.SecurityGroup;
@@ -27,16 +27,45 @@ export class Networking extends pulumi.ComponentResource {
             },
         }, { parent: this });
 
-        // Create public subnet
-        this.subnet = new aws.ec2.Subnet(`${name}-subnet`, {
+        // Create public subnets in multiple availability zones
+        this.subnets = [];
+        
+        // Calculate CIDR blocks for subnets
+        const cidrParts = args.subnetCidr.split('/');
+        const baseIp = cidrParts[0];
+        const prefix = parseInt(cidrParts[1], 10);
+        
+        // Create subnets in the first two availability zones
+        const availabilityZones = pulumi.output(aws.getAvailabilityZones()).names;
+        
+        // First subnet - use the provided CIDR
+        const subnet1 = new aws.ec2.Subnet(`${name}-subnet-1`, {
             vpcId: this.vpc.id,
             cidrBlock: args.subnetCidr,
             mapPublicIpOnLaunch: true,
-            availabilityZone: pulumi.output(aws.getAvailabilityZones()).names[0],
+            availabilityZone: availabilityZones[0],
             tags: {
-                Name: `${args.stackName}-public-subnet`,
+                Name: `${args.stackName}-public-subnet-1`,
             },
         }, { parent: this });
+        this.subnets.push(subnet1);
+        
+        // Second subnet - calculate a new CIDR block
+        // For example, if args.subnetCidr is 192.168.1.0/24, we'll use 192.168.2.0/24
+        const ipParts = baseIp.split('.');
+        const newThirdOctet = parseInt(ipParts[2], 10) + 1;
+        const subnet2Cidr = `${ipParts[0]}.${ipParts[1]}.${newThirdOctet}.0/${prefix}`;
+        
+        const subnet2 = new aws.ec2.Subnet(`${name}-subnet-2`, {
+            vpcId: this.vpc.id,
+            cidrBlock: subnet2Cidr,
+            mapPublicIpOnLaunch: true,
+            availabilityZone: availabilityZones[1],
+            tags: {
+                Name: `${args.stackName}-public-subnet-2`,
+            },
+        }, { parent: this });
+        this.subnets.push(subnet2);
 
         // Create internet gateway
         this.internetGateway = new aws.ec2.InternetGateway(`${name}-igw`, {
@@ -60,11 +89,13 @@ export class Networking extends pulumi.ComponentResource {
             },
         }, { parent: this });
 
-        // Associate route table with subnet
-        const routeTableAssociation = new aws.ec2.RouteTableAssociation(`${name}-rt-assoc`, {
-            subnetId: this.subnet.id,
-            routeTableId: this.routeTable.id,
-        }, { parent: this });
+        // Associate route table with subnets
+        for (let i = 0; i < this.subnets.length; i++) {
+            const routeTableAssociation = new aws.ec2.RouteTableAssociation(`${name}-rt-assoc-${i+1}`, {
+                subnetId: this.subnets[i].id,
+                routeTableId: this.routeTable.id,
+            }, { parent: this });
+        }
 
         // Create security group
         this.securityGroup = new aws.ec2.SecurityGroup(`${name}-sg`, {
@@ -106,7 +137,7 @@ export class Networking extends pulumi.ComponentResource {
 
         this.registerOutputs({
             vpcId: this.vpc.id,
-            subnetId: this.subnet.id,
+            subnetIds: pulumi.output(this.subnets).apply(subnets => subnets.map(subnet => subnet.id)),
             securityGroupId: this.securityGroup.id,
         });
     }
