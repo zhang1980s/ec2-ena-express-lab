@@ -208,11 +208,79 @@ sudo make install
 
 ### Running Performance Tests
 
-You can run the performance tests using the provided script or manually with sockperf commands.
+You can run the performance tests using the provided scripts or manually with sockperf commands.
 
-#### Using the Automated Test Script
+#### Using the ENA Express Latency Benchmark Script
 
-The `run-performance-tests.sh` script automates the testing process:
+The `ena_express_latency_benchmark.sh` script is a specialized tool for comparing UDP latency performance between standard ENA and ENA Express:
+
+```bash
+# Run the benchmark script
+./ena_express_latency_benchmark.sh [--debug]
+```
+
+Key features:
+- Runs parallel UDP tests between standard ENA and ENA Express interfaces
+- Performs multiple iterations and repeats for statistical significance
+- Calculates improvement percentages between ENA and ENA Express
+- Generates comprehensive summary reports with detailed metrics
+- Saves all test results to a timestamped directory for later analysis
+- Optional `--debug` parameter for detailed diagnostic output
+
+The script automatically:
+1. Verifies sockperf servers are running on both endpoints
+2. Runs UDP ping-pong tests with configurable parameters
+3. Extracts key metrics (average, p50, p99, max latency)
+4. Calculates improvement percentages
+5. Generates formatted summary reports
+
+Example output:
+```
+======================================================
+          ENA vs ENA Express Performance Summary        
+========================================================
+Test Date: Fri Apr 11 08:26:10 UTC 2025
+Total Iterations: 10
+Repeats per Iteration: 10
+Total Tests: 100
+========================================================
+                     Connection Details                 
+========================================================
+Regular ENI:
+  Source IP: 192.168.3.170
+  Destination IP: 192.168.3.59
+
+ENA Express:
+  Source IP: 192.168.3.21
+  Destination IP: 192.168.3.145
+========================================================
+                     UDP Results                        
+========================================================
+Average Latency:
+  Regular ENI: 35.421 μs
+  ENA Express: 51.183 μs
+  Improvement: -44.50%
+
+p50 Latency:
+  Regular ENI: 34.912 μs
+  ENA Express: 50.781 μs
+  Improvement: -45.45%
+
+p99 Latency:
+  Regular ENI: 45.673 μs
+  ENA Express: 57.892 μs
+  Improvement: -26.75%
+
+Maximum Latency:
+  Regular ENI: 59.045 μs
+  ENA Express: 66.776 μs
+  Improvement: -13.09%
+========================================================
+```
+
+#### Using the General Performance Test Script
+
+The `run-performance-tests.sh` script automates a broader set of performance tests:
 
 1. On the server instance (Instance B):
    ```bash
