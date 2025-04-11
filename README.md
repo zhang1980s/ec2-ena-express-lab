@@ -4,6 +4,8 @@
 - [Infrastructure Overview](#infrastructure-overview)
 - [Understanding ENA and ENA Express](#understanding-ena-and-ena-express)
 - [Infrastructure Setup](#infrastructure-setup)
+  - [AWS CDK Implementation](#aws-cdk-implementation)
+  - [Pulumi Implementation](#pulumi-implementation)
 - [Testing Methodology](#testing-methodology)
 - [Analyzing Results](#analyzing-results)
 - [Troubleshooting](#troubleshooting)
@@ -83,7 +85,11 @@ Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
 ### Access Management
 - IAM role with Systems Manager access for remote management
 
-### Deployment Steps
+### AWS CDK Implementation
+
+The project includes an AWS CDK implementation in TypeScript.
+
+#### Deployment Steps
 
 1. Install the AWS CDK if you haven't already:
    ```bash
@@ -143,9 +149,9 @@ Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
    scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
    ```
 
-### Post-Deployment Steps
+#### Post-Deployment Steps for CDK
 
-After deploying the infrastructure, you need to enable ENA Express on the secondary ENIs:
+After deploying the infrastructure with CDK, you need to enable ENA Express on the secondary ENIs:
 
 1. Note the secondary ENI IDs from the stack outputs:
    ```bash
@@ -175,6 +181,70 @@ After deploying the infrastructure, you need to enable ENA Express on the second
      }
    }
    ```
+
+### Pulumi Implementation
+
+The project also includes a Pulumi implementation in TypeScript, which offers several advantages:
+
+#### Key Advantages of Pulumi Implementation
+
+1. **Direct ENA Express Support**: Pulumi directly supports enabling ENA Express on network interfaces, eliminating the need for post-deployment AWS CLI commands.
+
+2. **Modular Architecture**: The infrastructure is organized into reusable components (networking, compute, monitoring) following Pulumi best practices.
+
+3. **Type Safety**: Full TypeScript support with proper typing for better code quality and IDE assistance.
+
+4. **Simplified Configuration**: Easy configuration management through Pulumi's built-in config system.
+
+#### Deployment Steps
+
+1. Install Pulumi CLI if you haven't already:
+   ```bash
+   curl -fsSL https://get.pulumi.com | sh
+   ```
+
+2. Install dependencies:
+   ```bash
+   cd pulumi
+   npm install
+   ```
+
+3. Configure AWS credentials:
+   ```bash
+   aws configure
+   # or
+   export AWS_ACCESS_KEY_ID=<your-access-key>
+   export AWS_SECRET_ACCESS_KEY=<your-secret-key>
+   ```
+
+4. Deploy the stack using the deployment script:
+   ```bash
+   ./pulumi-deploy-to.sh <account-id> <region> [options]
+   ```
+
+   Options:
+   - `--with-monitoring`: Deploy the monitoring infrastructure
+   - `--stack <name>`: Use a specific stack name (default: dev)
+
+   Example:
+   ```bash
+   ./pulumi-deploy-to.sh 123456789012 us-east-1 --with-monitoring
+   ```
+
+5. Note the outputs from the deployment, which include:
+   - VPC ID
+   - Security Group ID
+   - Placement Group ID
+   - Instance IDs and Public IPs
+   - ENI IDs (with ENA Express already enabled)
+
+6. Make the testing scripts executable and transfer them to the instances as in the CDK implementation.
+
+#### No Post-Deployment Steps Required
+
+Unlike the CDK implementation, the Pulumi implementation enables ENA Express directly during deployment, so no post-deployment steps are required to enable ENA Express on the secondary ENIs.
+
+For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/README.md).
 
 ## Testing Methodology
 
@@ -467,7 +537,9 @@ To avoid ongoing charges, clean up the infrastructure when testing is complete:
 5. Delete the VPC and associated resources
 6. Delete the monitoring infrastructure (if deployed)
 
-You can destroy the stacks using one of these methods:
+### Cleaning up CDK Resources
+
+You can destroy the CDK stacks using one of these methods:
 
 **Option 1: Destroy using default AWS profile and region**
 ```bash
@@ -492,6 +564,33 @@ cdk destroy --context stackName=MyCustomStack --context monitoringStackName=MyMo
 Or using the deployment script:
 ```bash
 ./cdk-deploy-to.sh 123456789012 us-east-1 destroy --context stackName=MyCustomStack --context monitoringStackName=MyMonitoringStack
+```
+
+### Cleaning up Pulumi Resources
+
+You can destroy the Pulumi stack using one of these methods:
+
+**Option 1: Using the deployment script**
+```bash
+./pulumi/pulumi-deploy-to.sh <account-id> <region> destroy
+```
+
+Example:
+```bash
+./pulumi/pulumi-deploy-to.sh 123456789012 us-east-1 destroy
+```
+
+**Option 2: Using Pulumi CLI directly**
+```bash
+cd pulumi
+pulumi destroy
+```
+
+**Option 3: Destroy a specific stack**
+```bash
+cd pulumi
+pulumi stack select <stack-name>
+pulumi destroy
 ```
 
 ---
