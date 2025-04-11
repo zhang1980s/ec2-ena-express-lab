@@ -28,7 +28,7 @@ const defaultConfig: EnaExpressLabConfig = {
     vpcCidr: "192.168.0.0/16",
     subnetCidr: "192.168.1.0/24",
     instanceType: "c6i.8xlarge",
-    keyPairName: "keypair-sandbox0-sin-mymac",
+    keyPairName: "keypair-sandbox0-sin-mymac.pem",
     instanceCount: 2,
     grafanaPassword: "admin",
 };
