@@ -44,10 +44,11 @@ run_sockperf() {
     
     echo "Running ${type} test (Iteration ${iteration}, Repeat ${repeat}): ${five_tuple}" >&2
     
-    # Run sockperf and capture output
+    # Run sockperf and capture output with verbose mode
     sockperf ping-pong -i "${remote_ip}" -p "${remote_port}" \
         --client_ip "${local_ip}" --client_port "${local_port}" \
-        --time 60 --full-rtt --msg-size 1200 --mps 1000 > "${output_file}" 2>&1
+        --time 60 --full-rtt --msg-size 1200 --mps 1000 \
+        --full-log /dev/null -v > "${output_file}" 2>&1
     
     # Extract key metrics
     local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
@@ -82,9 +83,52 @@ extract_metrics() {
     local output_file=$1
     local five_tuple=$2
     
-    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local percentile_50=$(grep -oP "median-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local percentile_99=$(grep -oP "percentile 99.00=\K[0-9.]+" "${output_file}" || echo "N/A")
+    # Print the first 50 lines of the output file for debugging
+    echo "DEBUG: First 50 lines of ${output_file}:" >&2
+    head -n 50 "${output_file}" >&2
+    
+    # Try different grep patterns to find the metrics
+    # Also print the entire line that might contain the metrics for debugging
+    echo "DEBUG: Lines containing 'lat' or 'latency':" >&2
+    grep -i "lat\|latency" "${output_file}" | head -n 20 >&2
+    
+    echo "DEBUG: Lines containing 'summary' or 'stat':" >&2
+    grep -i "summary\|stat" "${output_file}" | head -n 20 >&2
+    
+    echo "DEBUG: Lines containing percentile information:" >&2
+    grep -i "percentile\|median\|50.*=\|99.*=" "${output_file}" | head -n 20 >&2
+    
+    # Try many different patterns to extract the average latency
+    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${output_file}" 2>/dev/null || 
+                        grep -oP "Summary: Latency is \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        grep -oP "Average latency.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        grep -oP "avg.*latency.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        grep -oP "average.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        grep -oP "latency average: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        grep -oP "average = \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                        echo "N/A")
+    
+    # Try many different patterns to extract the median (p50) latency
+    local percentile_50=$(grep -oP "median-lat=\K[0-9.]+" "${output_file}" 2>/dev/null || 
+                          grep -oP "Median Latency.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "50.00 = \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "50th percentile.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "median.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "p50.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          echo "N/A")
+    
+    # Try many different patterns to extract the p99 latency
+    local percentile_99=$(grep -oP "percentile 99.00=\K[0-9.]+" "${output_file}" 2>/dev/null || 
+                          grep -oP "99.00 = \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "99th percentile.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "p99.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          grep -oP "99%.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
+                          echo "N/A")
+    
+    echo "DEBUG: Extracted metrics from ${output_file}:" >&2
+    echo "  Average: ${avg_latency}" >&2
+    echo "  p50: ${percentile_50}" >&2
+    echo "  p99: ${percentile_99}" >&2
     
     echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99}"
 }
