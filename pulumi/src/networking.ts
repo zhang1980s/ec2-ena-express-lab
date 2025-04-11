@@ -38,10 +38,15 @@ export class Networking extends pulumi.ComponentResource {
         // Create subnets in the first two availability zones
         const availabilityZones = pulumi.output(aws.getAvailabilityZones()).names;
         
-        // First subnet - use the provided CIDR
+        // First subnet - use a different CIDR to avoid conflicts
+        // For example, if args.subnetCidr is 192.168.1.0/24, we'll use 192.168.3.0/24
+        const ipParts = baseIp.split('.');
+        const firstSubnetOctet = parseInt(ipParts[2], 10) + 2; // Use +2 to avoid conflicts
+        const subnet1Cidr = `${ipParts[0]}.${ipParts[1]}.${firstSubnetOctet}.0/${prefix}`;
+        
         const subnet1 = new aws.ec2.Subnet(`${name}-subnet-1`, {
             vpcId: this.vpc.id,
-            cidrBlock: args.subnetCidr,
+            cidrBlock: subnet1Cidr,
             mapPublicIpOnLaunch: true,
             availabilityZone: availabilityZones[0],
             tags: {
@@ -51,10 +56,9 @@ export class Networking extends pulumi.ComponentResource {
         this.subnets.push(subnet1);
         
         // Second subnet - calculate a new CIDR block
-        // For example, if args.subnetCidr is 192.168.1.0/24, we'll use 192.168.2.0/24
-        const ipParts = baseIp.split('.');
-        const newThirdOctet = parseInt(ipParts[2], 10) + 1;
-        const subnet2Cidr = `${ipParts[0]}.${ipParts[1]}.${newThirdOctet}.0/${prefix}`;
+        // For example, if first subnet is 192.168.3.0/24, we'll use 192.168.4.0/24
+        const secondSubnetOctet = firstSubnetOctet + 1;
+        const subnet2Cidr = `${ipParts[0]}.${ipParts[1]}.${secondSubnetOctet}.0/${prefix}`;
         
         const subnet2 = new aws.ec2.Subnet(`${name}-subnet-2`, {
             vpcId: this.vpc.id,
