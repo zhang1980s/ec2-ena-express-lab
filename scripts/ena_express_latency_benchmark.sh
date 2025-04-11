@@ -28,7 +28,7 @@ echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protoco
 echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th" > "${SRD_SUMMARY}"
 echo "Iteration,Repeat,Timestamp,ENI_5Tuple,SRD_5Tuple,ENI_Avg,SRD_Avg,ENI_p50,SRD_p50,ENI_p99,SRD_p99,Improvement_Avg_Percent,Improvement_p50_Percent,Improvement_p99_Percent" > "${COMPARISON}"
 
-# Function to run sockperf test
+# Function to run sockperf test and return metrics
 run_sockperf() {
     local remote_ip=$1
     local remote_port=$2
@@ -42,7 +42,7 @@ run_sockperf() {
     # Create 5-tuple string (src_ip:src_port -> dst_ip:dst_port/protocol)
     local five_tuple="${local_ip}:${local_port}->${remote_ip}:${remote_port}/TCP"
     
-    echo "Running ${type} test (Iteration ${iteration}, Repeat ${repeat}): ${five_tuple}"
+    echo "Running ${type} test (Iteration ${iteration}, Repeat ${repeat}): ${five_tuple}" >&2
     
     # Run sockperf and capture output
     sockperf ping-pong -i "${remote_ip}" -p "${remote_port}" \
@@ -77,6 +77,18 @@ run_sockperf() {
     echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99}"
 }
 
+# Function to extract metrics from sockperf output file
+extract_metrics() {
+    local output_file=$1
+    local five_tuple=$2
+    
+    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
+    local percentile_50=$(grep -oP "median-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
+    local percentile_99=$(grep -oP "percentile 99.00=\K[0-9.]+" "${output_file}" || echo "N/A")
+    
+    echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99}"
+}
+
 # Main test loop
 for ((i = 0; i < ITERATIONS; i++)); do
     PORT_ENI=$((BASE_PORT + i * 2))
@@ -102,8 +114,11 @@ for ((i = 0; i < ITERATIONS; i++)); do
         wait $SRD_PID
         
         # Extract metrics for comparison
-        ENI_METRICS=$(run_sockperf "${REMOTE_IP_ENI}" "${REMOTE_PORT_ENI}" "${LOCAL_IP_ENI}" "${PORT_ENI}" "${ENI_OUTPUT}" "ENI" "$i" "$j")
-        SRD_METRICS=$(run_sockperf "${REMOTE_IP_SRD}" "${REMOTE_PORT_SRD}" "${LOCAL_IP_SRD}" "${PORT_SRD}" "${SRD_OUTPUT}" "SRD" "$i" "$j")
+        ENI_5TUPLE="${LOCAL_IP_ENI}:${PORT_ENI}->${REMOTE_IP_ENI}:${REMOTE_PORT_ENI}/TCP"
+        SRD_5TUPLE="${LOCAL_IP_SRD}:${PORT_SRD}->${REMOTE_IP_SRD}:${REMOTE_PORT_SRD}/TCP"
+        
+        ENI_METRICS=$(extract_metrics "${ENI_OUTPUT}" "${ENI_5TUPLE}")
+        SRD_METRICS=$(extract_metrics "${SRD_OUTPUT}" "${SRD_5TUPLE}")
         
         # Parse metrics - using semicolon as separator to avoid issues with commas in the 5-tuple
         ENI_5TUPLE=$(echo "$ENI_METRICS" | cut -d';' -f1)
