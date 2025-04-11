@@ -4,7 +4,6 @@ import * as aws from "@pulumi/aws";
 export interface ComputeArgs {
     stackName: string;
     subnetId: pulumi.Input<string>;
-    secondarySubnetId: pulumi.Input<string>; // Added secondary subnet ID
     securityGroupId: pulumi.Input<string>;
     instanceType: string;
     keyPairName: string;
@@ -87,11 +86,11 @@ export class Compute extends pulumi.ComponentResource {
             }, { parent: this });
             this.primaryEnis.push(primaryEni);
 
-            // Create the secondary network interface in the secondary subnet
+            // Create the secondary network interface
             const secondaryEni = new aws.ec2.NetworkInterface(`${name}-secondary-eni-${i}`, {
-                subnetId: args.secondarySubnetId,
+                subnetId: args.subnetId,
                 securityGroups: [args.securityGroupId],
-                description: `Secondary ENI with ENA Express for instance ${i} (in secondary subnet)`,
+                description: `Secondary ENI with ENA Express for instance ${i}`,
                 tags: {
                     Name: `${args.stackName}-secondary-eni-${i}`,
                 },

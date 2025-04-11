@@ -10,8 +10,6 @@ export interface NetworkingArgs {
 export class Networking extends pulumi.ComponentResource {
     public readonly vpc: aws.ec2.Vpc;
     public readonly subnets: aws.ec2.Subnet[];
-    public readonly secondaryCidrBlock: aws.ec2.VpcIpv4CidrBlockAssociation;
-    public readonly secondarySubnet: aws.ec2.Subnet;
     public readonly internetGateway: aws.ec2.InternetGateway;
     public readonly routeTable: aws.ec2.RouteTable;
     public readonly securityGroup: aws.ec2.SecurityGroup;
@@ -73,26 +71,6 @@ export class Networking extends pulumi.ComponentResource {
         }, { parent: this });
         this.subnets.push(subnet2);
 
-        // Add secondary CIDR block to the VPC
-        this.secondaryCidrBlock = new aws.ec2.VpcIpv4CidrBlockAssociation(`${name}-secondary-cidr`, {
-            vpcId: this.vpc.id,
-            cidrBlock: "172.16.0.0/16",
-        }, { parent: this });
-
-        // Create a subnet in the secondary CIDR block
-        this.secondarySubnet = new aws.ec2.Subnet(`${name}-secondary-subnet`, {
-            vpcId: this.vpc.id,
-            cidrBlock: "172.16.1.0/24",
-            mapPublicIpOnLaunch: true,
-            availabilityZone: availabilityZones[0], // Use the same AZ as the first subnet
-            tags: {
-                Name: `${args.stackName}-secondary-subnet`,
-            },
-        }, { 
-            parent: this,
-            dependsOn: [this.secondaryCidrBlock], // Ensure the secondary CIDR block is associated first
-        });
-
         // Create internet gateway
         this.internetGateway = new aws.ec2.InternetGateway(`${name}-igw`, {
             vpcId: this.vpc.id,
@@ -122,12 +100,6 @@ export class Networking extends pulumi.ComponentResource {
                 routeTableId: this.routeTable.id,
             }, { parent: this });
         }
-
-        // Associate route table with secondary subnet
-        const secondaryRtAssoc = new aws.ec2.RouteTableAssociation(`${name}-secondary-rt-assoc`, {
-            subnetId: this.secondarySubnet.id,
-            routeTableId: this.routeTable.id,
-        }, { parent: this });
 
         // Create security group
         this.securityGroup = new aws.ec2.SecurityGroup(`${name}-sg`, {
@@ -170,7 +142,6 @@ export class Networking extends pulumi.ComponentResource {
         this.registerOutputs({
             vpcId: this.vpc.id,
             subnetIds: pulumi.output(this.subnets).apply(subnets => subnets.map(subnet => subnet.id)),
-            secondarySubnetId: this.secondarySubnet.id,
             securityGroupId: this.securityGroup.id,
         });
     }
