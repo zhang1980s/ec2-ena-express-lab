@@ -40,7 +40,7 @@ DESTROY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --with-monitoring)
-            CONFIG_ARGS="$CONFIG_ARGS --config deployMonitoring=true"
+            DEPLOY_MONITORING=true
             shift
             ;;
         --stack)
@@ -69,6 +69,10 @@ cd pulumi
 echo "Installing dependencies..."
 npm install
 
+# Build the TypeScript files
+echo "Building TypeScript files..."
+npm run build
+
 # Create the stack if it doesn't exist
 echo "Selecting/creating stack $STACK_NAME..."
 pulumi stack select $STACK_NAME 2>/dev/null || pulumi stack init $STACK_NAME
@@ -78,9 +82,9 @@ echo "Setting AWS region to $AWS_REGION..."
 pulumi config set aws:region $AWS_REGION
 
 # Apply any additional configuration
-if [ -n "$CONFIG_ARGS" ]; then
-    echo "Applying additional configuration: $CONFIG_ARGS"
-    pulumi config $CONFIG_ARGS
+if [ "$DEPLOY_MONITORING" = true ]; then
+    echo "Enabling monitoring..."
+    pulumi config set deployMonitoring true
 fi
 
 # Deploy or destroy the stack

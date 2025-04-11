@@ -2,7 +2,7 @@
   "name": "ec2-ena-express-lab",
   "version": "1.0.0",
   "description": "Infrastructure for ENA vs ENA Express latency performance testing",
-  "main": "index.js",
+  "main": "bin/index.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
