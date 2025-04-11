@@ -4,8 +4,6 @@
 - [Infrastructure Overview](#infrastructure-overview)
 - [Understanding ENA and ENA Express](#understanding-ena-and-ena-express)
 - [Infrastructure Setup](#infrastructure-setup)
-  - [AWS CDK Implementation](#aws-cdk-implementation)
-  - [Pulumi Implementation](#pulumi-implementation)
 - [Testing Methodology](#testing-methodology)
 - [Analyzing Results](#analyzing-results)
 - [Troubleshooting](#troubleshooting)
@@ -61,7 +59,7 @@ ENA Express is particularly beneficial for:
 
 ## Infrastructure Setup
 
-Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
+Our infrastructure is deployed using Pulumi with TypeScript, consisting of:
 
 ### Networking Components
 - VPC with CIDR block 192.168.0.0/16
@@ -80,111 +78,14 @@ Our infrastructure is deployed using AWS CDK with TypeScript, consisting of:
 
 ### Network Interface Configuration
 - Primary ENI: Standard ENA configuration
-- Secondary ENI: Requires enabling ENA Express after deployment (see Post-Deployment Steps)
+- Secondary ENI: ENA Express and ENA Express UDP enabled (configured directly during deployment)
 
 ### Access Management
 - IAM role with Systems Manager access for remote management
 
-### AWS CDK Implementation
-
-The project includes an AWS CDK implementation in TypeScript.
-
-#### Deployment Steps
-
-1. Install the AWS CDK if you haven't already:
-   ```bash
-   npm install -g aws-cdk
-   ```
-
-2. Configure your AWS credentials:
-   ```bash
-   aws configure
-   ```
-
-3. Bootstrap your AWS environment (if not already done):
-   ```bash
-   cdk bootstrap
-   ```
-
-4. Deploy the stack using one of these methods:
-
-   **Option 1: Deploy using default AWS profile and region**
-   ```bash
-   cdk deploy
-   ```
-
-   **Option 2: Deploy to a specific account and region using the deployment script**
-   ```bash
-   ./cdk-deploy-to.sh <account-id> <region> [additional-options]
-   ```
-
-   Example:
-   ```bash
-   ./cdk-deploy-to.sh 123456789012 us-east-1
-   ```
-
-   **Option 3: Deploy with a custom stack name**
-   ```bash
-   cdk deploy --context stackName=MyCustomStack
-   ```
-   
-   Or using the deployment script:
-   ```bash
-   ./cdk-deploy-to.sh 123456789012 us-east-1 --context stackName=MyCustomStack
-   ```
-
-5. Note the outputs from the deployment, which include:
-   - VPC ID
-   - Security Group ID
-   - Placement Group Name
-
-6. Make the testing scripts executable:
-   ```bash
-   chmod +x scripts/install-test-tools.sh scripts/run-performance-tests.sh
-   ```
-
-7. Transfer the scripts to your EC2 instances using SCP or AWS Systems Manager:
-   ```bash
-   # Example using SCP
-   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
-   ```
-
-#### Post-Deployment Steps for CDK
-
-After deploying the infrastructure with CDK, you need to enable ENA Express on the secondary ENIs:
-
-1. Note the secondary ENI IDs from the stack outputs:
-   ```bash
-   aws cloudformation describe-stacks --stack-name Ec2EnaExpressLabStack --query "Stacks[0].Outputs[?starts_with(OutputKey, 'SecondaryENI')].{Key:OutputKey,Value:OutputValue}" --output table
-   ```
-
-2. Enable ENA Express and ENA Express UDP on each secondary ENI:
-   ```bash
-   aws ec2 modify-network-interface-attribute \
-     --network-interface-id <eni-id> \
-     --ena-srd-specification 'EnaSrdEnabled=true,EnaSrdUdpSpecification={EnaSrdUdpEnabled=true}'
-   ```
-
-3. Verify that ENA Express is enabled:
-   ```bash
-   aws ec2 describe-network-interfaces \
-     --network-interface-ids <eni-id> \
-     --query 'NetworkInterfaces[0].EnaSrdSpecification'
-   ```
-
-   The output should show:
-   ```json
-   {
-     "EnaSrdEnabled": true,
-     "EnaSrdUdpSpecification": {
-       "EnaSrdUdpEnabled": true
-     }
-   }
-   ```
-
 ### Pulumi Implementation
 
-The project also includes a Pulumi implementation in TypeScript, which offers several advantages:
+The project uses Pulumi with TypeScript, which offers several advantages:
 
 #### Key Advantages of Pulumi Implementation
 
@@ -196,6 +97,22 @@ The project also includes a Pulumi implementation in TypeScript, which offers se
 
 4. **Simplified Configuration**: Easy configuration management through Pulumi's built-in config system.
 
+#### Project Structure
+
+```
+pulumi/
+├── Pulumi.yaml           # Project configuration
+├── Pulumi.dev.yaml       # Dev stack configuration
+├── package.json          # Node.js dependencies
+├── tsconfig.json         # TypeScript configuration
+└── src/
+    ├── index.ts          # Main entry point
+    ├── config.ts         # Configuration handling
+    ├── networking.ts     # VPC, subnet, security group
+    ├── compute.ts        # EC2 instances, ENIs with ENA Express
+    └── monitoring.ts     # Prometheus and Grafana monitoring
+```
+
 #### Deployment Steps
 
 1. Install Pulumi CLI if you haven't already:
@@ -205,7 +122,6 @@ The project also includes a Pulumi implementation in TypeScript, which offers se
 
 2. Install dependencies:
    ```bash
-   cd pulumi
    npm install
    ```
 
@@ -219,7 +135,7 @@ The project also includes a Pulumi implementation in TypeScript, which offers se
 
 4. Deploy the stack using the deployment script:
    ```bash
-   ./pulumi-deploy-to.sh <account-id> <region> [options]
+   ./deploy.sh <account-id> <region> [options]
    ```
 
    Options:
@@ -228,7 +144,7 @@ The project also includes a Pulumi implementation in TypeScript, which offers se
 
    Example:
    ```bash
-   ./pulumi-deploy-to.sh 123456789012 us-east-1 --with-monitoring
+   ./deploy.sh 123456789012 us-east-1 --with-monitoring
    ```
 
 5. Note the outputs from the deployment, which include:
@@ -238,11 +154,16 @@ The project also includes a Pulumi implementation in TypeScript, which offers se
    - Instance IDs and Public IPs
    - ENI IDs (with ENA Express already enabled)
 
-6. Make the testing scripts executable and transfer them to the instances as in the CDK implementation.
+6. Make the testing scripts executable:
+   ```bash
+   chmod +x scripts/install-test-tools.sh scripts/run-performance-tests.sh
+   ```
 
-#### No Post-Deployment Steps Required
-
-Unlike the CDK implementation, the Pulumi implementation enables ENA Express directly during deployment, so no post-deployment steps are required to enable ENA Express on the secondary ENIs.
+7. Transfer the scripts to your EC2 instances using SCP or AWS Systems Manager:
+   ```bash
+   # Example using SCP
+   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
+   ```
 
 For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/README.md).
 
@@ -482,12 +403,7 @@ graph TD
 
 1. Deploy the monitoring stack along with the main infrastructure:
    ```bash
-   ./cdk-deploy-to.sh <account-id> <region> --with-monitoring
-   ```
-
-   Or deploy only the monitoring stack:
-   ```bash
-   ./cdk-deploy-to.sh <account-id> <region> --monitoring-only
+   ./deploy.sh <account-id> <region> --with-monitoring
    ```
 
 2. Note the outputs from the deployment, which include:
@@ -537,47 +453,18 @@ To avoid ongoing charges, clean up the infrastructure when testing is complete:
 5. Delete the VPC and associated resources
 6. Delete the monitoring infrastructure (if deployed)
 
-### Cleaning up CDK Resources
-
-You can destroy the CDK stacks using one of these methods:
-
-**Option 1: Destroy using default AWS profile and region**
-```bash
-cdk destroy Ec2EnaExpressLabStack MonitoringStack
-```
-
-**Option 2: Destroy stacks deployed to a specific account and region**
-```bash
-./cdk-deploy-to.sh <account-id> <region> destroy Ec2EnaExpressLabStack MonitoringStack
-```
-
-Example:
-```bash
-./cdk-deploy-to.sh 123456789012 us-east-1 destroy Ec2EnaExpressLabStack MonitoringStack
-```
-
-**Option 3: Destroy stacks with custom names**
-```bash
-cdk destroy --context stackName=MyCustomStack --context monitoringStackName=MyMonitoringStack
-```
-
-Or using the deployment script:
-```bash
-./cdk-deploy-to.sh 123456789012 us-east-1 destroy --context stackName=MyCustomStack --context monitoringStackName=MyMonitoringStack
-```
-
 ### Cleaning up Pulumi Resources
 
 You can destroy the Pulumi stack using one of these methods:
 
 **Option 1: Using the deployment script**
 ```bash
-./pulumi/pulumi-deploy-to.sh <account-id> <region> destroy
+./deploy.sh <account-id> <region> destroy
 ```
 
 Example:
 ```bash
-./pulumi/pulumi-deploy-to.sh 123456789012 us-east-1 destroy
+./deploy.sh 123456789012 us-east-1 destroy
 ```
 
 **Option 2: Using Pulumi CLI directly**
