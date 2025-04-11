@@ -69,7 +69,7 @@ Our infrastructure is deployed using Pulumi with TypeScript, consisting of:
 ### Compute Resources
 - Cluster placement group for low-latency networking between instances
 - Two c6i.8xlarge EC2 instances running Amazon Linux 2023
-- SSH access using existing key pair (keypair-sandbox0-sin-mymac.pem)
+- SSH access using existing key pair (keypair-sandbox0-sin-mymac)
 
 ### Security Configuration
 - Security group with the following rules:
@@ -162,7 +162,7 @@ pulumi/
 7. Transfer the scripts to your EC2 instances using SCP or AWS Systems Manager:
    ```bash
    # Example using SCP
-   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
+   scp -i /path/to/keypair-sandbox0-sin-mymac scripts/* ec2-user@[instance-ip]:/home/ec2-user/
    ```
 
 For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/README.md).
