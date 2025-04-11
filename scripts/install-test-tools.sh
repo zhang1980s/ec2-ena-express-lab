@@ -8,7 +8,8 @@ echo "Updating system packages..."
 sudo dnf update -y
 
 echo "Installing dependencies for sockperf..."
-sudo dnf install -y gcc make automake autoconf libtool wget unzip
+sudo dnf groupinstall -y "Development Tools"
+sudo dnf install -y wget unzip
 
 echo "Downloading and installing sockperf..."
 wget https://github.com/Mellanox/sockperf/archive/refs/tags/3.10.zip
