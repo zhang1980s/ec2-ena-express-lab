@@ -172,7 +172,7 @@ scrape_configs:
                         }
                     ]
                 }
-            ]`.apply(JSON.stringify),
+            ]`,
             volumes: [
                 {
                     name: "prometheus-config",
@@ -229,7 +229,7 @@ scrape_configs:
                         }
                     ]
                 }
-            ]`.apply(JSON.stringify),
+            ]`,
             tags: {
                 Name: `${args.stackName}-grafana-task`,
             },

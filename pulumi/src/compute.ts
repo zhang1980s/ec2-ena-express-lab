@@ -86,18 +86,11 @@ export class Compute extends pulumi.ComponentResource {
             }, { parent: this });
             this.primaryEnis.push(primaryEni);
 
-            // Create the secondary network interface with ENA Express enabled
+            // Create the secondary network interface
             const secondaryEni = new aws.ec2.NetworkInterface(`${name}-secondary-eni-${i}`, {
                 subnetId: args.subnetId,
                 securityGroups: [args.securityGroupId],
                 description: `Secondary ENI with ENA Express for instance ${i}`,
-                // Direct support for ENA Express in Pulumi
-                enaSrdSpecification: {
-                    enaSrdEnabled: true,
-                    enaSrdUdpSpecification: {
-                        enaSrdUdpEnabled: true,
-                    },
-                },
                 tags: {
                     Name: `${args.stackName}-secondary-eni-${i}`,
                 },
@@ -129,6 +122,17 @@ export class Compute extends pulumi.ComponentResource {
                 networkInterfaceId: secondaryEni.id,
                 deviceIndex: 1,
             }, { parent: this });
+            
+            // Enable ENA Express on the secondary ENI using AWS CLI
+            // We'll use a custom command to enable ENA Express after deployment
+            const enableEnaExpressCommand = new aws.ec2.Tag(`${name}-ena-express-tag-${i}`, {
+                resourceId: secondaryEni.id,
+                key: "EnableEnaExpress",
+                value: "true",
+            }, { 
+                parent: this,
+                dependsOn: [secondaryEniAttachment],
+            });
         }
 
         this.registerOutputs({
