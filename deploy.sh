@@ -65,14 +65,21 @@ echo "AWS Account: $AWS_ACCOUNT, Region: $AWS_REGION, Stack: $STACK_NAME"
 # Change to the pulumi directory
 cd pulumi
 
+# Install dependencies
+echo "Installing dependencies..."
+npm install
+
 # Create the stack if it doesn't exist
+echo "Selecting/creating stack $STACK_NAME..."
 pulumi stack select $STACK_NAME 2>/dev/null || pulumi stack init $STACK_NAME
 
 # Set AWS region
+echo "Setting AWS region to $AWS_REGION..."
 pulumi config set aws:region $AWS_REGION
 
 # Apply any additional configuration
 if [ -n "$CONFIG_ARGS" ]; then
+    echo "Applying additional configuration: $CONFIG_ARGS"
     pulumi config $CONFIG_ARGS
 fi
 
