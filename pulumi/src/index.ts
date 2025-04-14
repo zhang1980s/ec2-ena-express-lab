@@ -44,9 +44,13 @@ export const placementGroupId = compute.placementGroup.id;
 export const instanceIds = pulumi.output(compute.instances).apply(instances => 
     instances.map((instance, i) => ({ [instanceNames[i]]: instance.id }))
 );
-export const instancePublicIps = pulumi.output(compute.instances).apply(instances => 
-    instances.map((instance, i) => ({ [instanceNames[i]]: instance.publicIp }))
-);
+export const instancePublicIps = pulumi.output(compute.instances).apply(instances => {
+    const result: Record<string, pulumi.Output<string>> = {};
+    instances.forEach((instance, i) => {
+        result[instanceNames[i]] = instance.publicIp;
+    });
+    return result;
+});
 export const primaryEniIds = pulumi.output(compute.primaryEnis).apply(enis => 
     enis.map((eni, i) => ({ [`${instanceNames[i]}-primary`]: eni.id }))
 );

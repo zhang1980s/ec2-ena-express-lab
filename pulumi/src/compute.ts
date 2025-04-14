@@ -226,12 +226,33 @@ echo "Download complete."
             });
         }
 
+        // Create an output that displays the instance names and their public IPs
+        const instancePublicIps = pulumi.output(this.instances).apply(instances => 
+            instances.map((instance, i) => ({
+                name: instanceConfigs[i].name,
+                publicIp: instance.publicIp
+            }))
+        );
+        
+        // Log the instance names and public IPs when the deployment is complete
+        instancePublicIps.apply(ips => {
+            console.log("\n=== EC2 Instances Public IPs ===");
+            ips.forEach(ip => {
+                console.log(`${ip.name}: ${ip.publicIp}`);
+            });
+            console.log("===============================\n");
+            return ips;
+        });
+
         this.registerOutputs({
             placementGroupId: this.placementGroup.id,
             instanceIds: pulumi.output(this.instances).apply(instances => instances.map(instance => instance.id)),
             primaryEniIds: pulumi.output(this.primaryEnis).apply(enis => enis.map(eni => eni.id)),
             secondaryEniIds: pulumi.output(this.secondaryEnis).apply(enis => enis.map(eni => eni.id)),
-            instancePublicIps: pulumi.output(this.instances).apply(instances => instances.map(instance => instance.publicIp)),
+            instancePublicIps: pulumi.output(this.instances).apply(instances => instances.map((instance, i) => ({ 
+                name: instanceConfigs[i].name,
+                publicIp: instance.publicIp 
+            }))),
         });
     }
 }
