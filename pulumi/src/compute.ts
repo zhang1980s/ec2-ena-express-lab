@@ -102,15 +102,15 @@ export class Compute extends pulumi.ComponentResource {
             {
                 name: "sockperf-server",
                 hostname: "sockperf-server.zzhe.xyz",
-                primaryIp: "192.168.1.1",
-                secondaryIp: "192.168.1.11",
+                primaryIp: "192.168.3.10",
+                secondaryIp: "192.168.3.11",
                 isServer: true
             },
             {
                 name: "sockperf-client",
                 hostname: "sockperf-client.zzhe.xyz",
-                primaryIp: "192.168.1.2",
-                secondaryIp: "192.168.1.22",
+                primaryIp: "192.168.3.20",
+                secondaryIp: "192.168.3.21",
                 isServer: false
             }
         ];
@@ -180,6 +180,12 @@ echo "127.0.0.1 ${config.hostname}" >> /etc/hosts
 
 # Install sockperf and dependencies
 ${sockperfInstallScript}
+
+# Download the ena_express_latency_benchmark.sh script
+echo "Downloading ena_express_latency_benchmark.sh script from GitHub..."
+wget https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.sh
+chmod +x ena_express_latency_benchmark.sh
+echo "Download complete."
 
 # Additional server-specific configuration
 ${config.isServer ? `
