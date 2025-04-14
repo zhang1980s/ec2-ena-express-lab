@@ -15,14 +15,14 @@ This guide outlines a test environment for comparing network latency performance
 
 ```mermaid
 graph TD
-    VPC["VPC (192.168.0.0/16)"] --> Subnet["Public Subnet (192.168.1.0/24)"]
+    VPC["VPC (192.168.0.0/16)"] --> Subnet["Public Subnet (192.168.3.0/24)"]
     Subnet --> PG["Cluster Placement Group"]
     PG --> SERVER["sockperf-server (c6i.8xlarge)"]
     PG --> CLIENT["sockperf-client (c6i.8xlarge)"]
-    SERVER --> ENI1S["Primary ENI (192.168.1.1)"]
-    SERVER --> ENI2S["Secondary ENI (192.168.1.11) with ENA Express"]
-    CLIENT --> ENI1C["Primary ENI (192.168.1.2)"]
-    CLIENT --> ENI2C["Secondary ENI (192.168.1.22) with ENA Express"]
+    SERVER --> ENI1S["Primary ENI (192.168.3.10)"]
+    SERVER --> ENI2S["Secondary ENI (192.168.3.11) with ENA Express"]
+    CLIENT --> ENI1C["Primary ENI (192.168.3.20)"]
+    CLIENT --> ENI2C["Secondary ENI (192.168.3.21) with ENA Express"]
     SG["Security Group"] --> SERVER
     SG --> CLIENT
     IAM["IAM Role (SSM Access)"] --> SERVER
@@ -63,7 +63,7 @@ Our infrastructure is deployed using Pulumi with TypeScript, consisting of:
 
 ### Networking Components
 - VPC with CIDR block 192.168.0.0/16
-- Public subnet with CIDR block 192.168.1.0/24
+- Public subnet with CIDR block 192.168.3.0/24
 - Internet Gateway for public internet access
 
 ### Compute Resources
@@ -286,13 +286,13 @@ The `run-performance-tests.sh` script automates a broader set of performance tes
    chmod +x run-performance-tests.sh
    
    # Run tests against the standard ENA interface
-   ./run-performance-tests.sh client 192.168.1.1 ena
+   ./run-performance-tests.sh client 192.168.3.10 ena
    
    # Run tests against the ENA Express interface
-   ./run-performance-tests.sh client 192.168.1.11 ena-express
+   ./run-performance-tests.sh client 192.168.3.11 ena-express
    
    # Or run both test sets
-   ./run-performance-tests.sh client 192.168.1.1
+   ./run-performance-tests.sh client 192.168.3.10
    ```
 
 The script will:
@@ -313,10 +313,10 @@ If you prefer to run tests manually, you can use the following sockperf commands
 # The server is already running on port 11111
 
 # On sockperf-client - Standard ENA
-sockperf ping-pong --tcp -i 192.168.1.1 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena.csv
+sockperf ping-pong --tcp -i 192.168.3.10 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena.csv
 
 # On sockperf-client - ENA Express
-sockperf ping-pong --tcp -i 192.168.1.11 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena_express.csv
+sockperf ping-pong --tcp -i 192.168.3.11 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena_express.csv
 ```
 
 **UDP Latency Tests:**
@@ -325,10 +325,10 @@ sockperf ping-pong --tcp -i 192.168.1.11 -p 11111 -t 60 -m 64 --full-log sockper
 # The server is already running on port 11112
 
 # On sockperf-client - Standard ENA
-sockperf ping-pong --udp -i 192.168.1.1 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena.csv
+sockperf ping-pong --udp -i 192.168.3.10 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena.csv
 
 # On sockperf-client - ENA Express
-sockperf ping-pong --udp -i 192.168.1.11 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena_express.csv
+sockperf ping-pong --udp -i 192.168.3.11 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena_express.csv
 ```
 
 ##### 2. Throughput Tests
@@ -339,10 +339,10 @@ sockperf ping-pong --udp -i 192.168.1.11 -p 11112 -t 60 -m 64 --full-log sockper
 sockperf server --tcp -p 11113
 
 # On sockperf-client - Standard ENA
-sockperf throughput --tcp -i 192.168.1.1 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena.csv
+sockperf throughput --tcp -i 192.168.3.10 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena.csv
 
 # On sockperf-client - ENA Express
-sockperf throughput --tcp -i 192.168.1.11 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena_express.csv
+sockperf throughput --tcp -i 192.168.3.11 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena_express.csv
 ```
 
 **UDP Throughput Tests:**
@@ -351,10 +351,10 @@ sockperf throughput --tcp -i 192.168.1.11 -p 11113 -t 60 -m 1472 --full-log sock
 sockperf server --udp -p 11114
 
 # On sockperf-client - Standard ENA
-sockperf throughput --udp -i 192.168.1.1 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena.csv
+sockperf throughput --udp -i 192.168.3.10 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena.csv
 
 # On sockperf-client - ENA Express
-sockperf throughput --udp -i 192.168.1.11 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena_express.csv
+sockperf throughput --udp -i 192.168.3.11 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena_express.csv
 ```
 
 ### Metrics to Collect
@@ -512,10 +512,10 @@ The project has been updated with the following improvements:
   - `sockperf-client`: Runs the sockperf client for testing
 
 - Fixed private IP addresses for consistent networking:
-  - `sockperf-server` primary ENI: 192.168.1.1
-  - `sockperf-server` secondary ENI: 192.168.1.11 (ENA Express enabled)
-  - `sockperf-client` primary ENI: 192.168.1.2
-  - `sockperf-client` secondary ENI: 192.168.1.22 (ENA Express enabled)
+  - `sockperf-server` primary ENI: 192.168.3.10
+  - `sockperf-server` secondary ENI: 192.168.3.11 (ENA Express enabled)
+  - `sockperf-client` primary ENI: 192.168.3.20
+  - `sockperf-client` secondary ENI: 192.168.3.21 (ENA Express enabled)
 
 #### 2. Automated Installation and Configuration
 
