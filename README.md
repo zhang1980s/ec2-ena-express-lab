@@ -267,40 +267,6 @@ Maximum Latency:
 ========================================================
 ```
 
-#### Using the General Performance Test Script
-
-The `run-performance-tests.sh` script automates a broader set of performance tests:
-
-1. On the sockperf-server instance:
-   ```bash
-   # Make the script executable if not already done
-   chmod +x run-performance-tests.sh
-   
-   # Start the sockperf servers for different test types
-   ./run-performance-tests.sh server
-   ```
-
-2. On the sockperf-client instance:
-   ```bash
-   # Make the script executable if not already done
-   chmod +x run-performance-tests.sh
-   
-   # Run tests against the standard ENA interface
-   ./run-performance-tests.sh client 192.168.3.10 ena
-   
-   # Run tests against the ENA Express interface
-   ./run-performance-tests.sh client 192.168.3.11 ena-express
-   
-   # Or run both test sets
-   ./run-performance-tests.sh client 192.168.3.10
-   ```
-
-The script will:
-- Run all the necessary tests (TCP/UDP latency and throughput)
-- Save detailed results to a timestamped directory
-- Process the results to extract key metrics
-- Generate a comprehensive summary report in markdown format with performance comparisons
-
 #### Manual Test Scenarios
 
 If you prefer to run tests manually, you can use the following sockperf commands:
