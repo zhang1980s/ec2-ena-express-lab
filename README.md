@@ -183,6 +183,7 @@ The sockperf tool is automatically installed on both instances during deployment
 - **sockperf**: A comprehensive network performance measurement tool for TCP and UDP
 - **Development tools**: Required for building and running sockperf
 - **Monitoring utilities**: Tools like htop and ethtool for system monitoring
+- **node_exporter**: Prometheus exporter for hardware and OS metrics (runs on port 9100)
 
 #### Verifying the Installation
 
@@ -419,8 +420,12 @@ This project includes a monitoring infrastructure based on Prometheus and Grafan
 graph TD
     CLIENT["sockperf-client"] --> |Metrics| Exporter1["sockperf Exporter"]
     SERVER["sockperf-server"] --> |Metrics| Exporter2["sockperf Exporter"]
+    CLIENT --> |System Metrics| NodeExp1["node_exporter"]
+    SERVER --> |System Metrics| NodeExp2["node_exporter"]
     Exporter1 --> |Scrape| Prometheus["Prometheus"]
     Exporter2 --> |Scrape| Prometheus
+    NodeExp1 --> |Scrape| Prometheus
+    NodeExp2 --> |Scrape| Prometheus
     Prometheus --> |Query| Grafana["Grafana Dashboard"]
     User["User"] --> |View| Grafana
 ```
@@ -504,7 +509,14 @@ The project has been updated with the following improvements:
   - For ENA Express testing: `sockperf server -i 192.168.3.11 -p 11111`
 - This allows for more flexibility in testing different configurations
 
-#### 4. IAM Role Dependency Improvements
+#### 4. System Monitoring with node_exporter
+
+- Added automatic installation of node_exporter on both instances
+- Configured as a systemd service that starts automatically on boot
+- Exposes system metrics on port 9100 for Prometheus to scrape
+- Provides detailed hardware and OS metrics for performance analysis during tests
+
+#### 5. IAM Role Dependency Improvements
 
 - Fixed IAM role dependency issues for clean resource deletion
 - Added proper ordering for policy attachments and role deletion

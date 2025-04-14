@@ -120,6 +120,13 @@ scrape_configs:
           group: 'sockperf'
           environment: 'test'
     
+  - job_name: 'node'
+    static_configs:
+      - targets: ${args.testInstanceIps ? args.testInstanceIps.map(ip => `${ip}:9100`) : ["instance-1:9100", "instance-2:9100"]}
+        labels:
+          group: 'nodes'
+          environment: 'test'
+    
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
