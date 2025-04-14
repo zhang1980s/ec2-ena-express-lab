@@ -183,7 +183,6 @@ The sockperf tool is automatically installed on both instances during deployment
 - **sockperf**: A comprehensive network performance measurement tool for TCP and UDP
 - **Development tools**: Required for building and running sockperf
 - **Monitoring utilities**: Tools like htop and ethtool for system monitoring
-- **Systemd services**: Pre-configured services for sockperf servers (on sockperf-server instance)
 
 #### Verifying the Installation
 
@@ -283,8 +282,8 @@ If you prefer to run tests manually, you can use the following sockperf commands
 
 **TCP Latency Tests:**
 ```bash
-# On sockperf-server (automatically started via systemd)
-# The server is already running on port 11111
+# On sockperf-server - start the server first
+sockperf server --tcp -p 11111
 
 # On sockperf-client - Standard ENA
 sockperf ping-pong --tcp -i 192.168.3.10 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena.csv
@@ -295,8 +294,8 @@ sockperf ping-pong --tcp -i 192.168.3.11 -p 11111 -t 60 -m 64 --full-log sockper
 
 **UDP Latency Tests:**
 ```bash
-# On sockperf-server (automatically started via systemd)
-# The server is already running on port 11112
+# On sockperf-server - start the server first
+sockperf server --udp -p 11112
 
 # On sockperf-client - Standard ENA
 sockperf ping-pong --udp -i 192.168.3.10 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena.csv
@@ -498,13 +497,12 @@ The project has been updated with the following improvements:
   - Server: `sockperf-server.zzhe.xyz`
   - Client: `sockperf-client.zzhe.xyz`
 
-#### 3. SockPerf Server Automation
+#### 3. Manual SockPerf Server Operation
 
-- Added systemd services for sockperf servers:
-  - TCP server on port 11111
-  - UDP server on port 11112
-- Configured automatic startup on boot
-- Implemented proper service restart policies
+- Sockperf servers need to be manually started on the server instance:
+  - For standard ENA testing: `sockperf server -i 192.168.3.10 -p 11110`
+  - For ENA Express testing: `sockperf server -i 192.168.3.11 -p 11111`
+- This allows for more flexibility in testing different configurations
 
 #### 4. IAM Role Dependency Improvements
 
