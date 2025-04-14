@@ -33,22 +33,25 @@ if (enaExpressLabConfig.deployMonitoring) {
     });
 }
 
+// Define instance names
+const instanceNames = ["sockperf-server", "sockperf-client"];
+
 // Export outputs
 export const vpcId = networking.vpc.id;
 export const subnetIds = pulumi.output(networking.subnets).apply(subnets => subnets.map(subnet => subnet.id));
 export const securityGroupId = networking.securityGroup.id;
 export const placementGroupId = compute.placementGroup.id;
 export const instanceIds = pulumi.output(compute.instances).apply(instances => 
-    instances.map((instance, i) => ({ [`instance${i+1}`]: instance.id }))
+    instances.map((instance, i) => ({ [instanceNames[i]]: instance.id }))
 );
 export const instancePublicIps = pulumi.output(compute.instances).apply(instances => 
-    instances.map((instance, i) => ({ [`instance${i+1}`]: instance.publicIp }))
+    instances.map((instance, i) => ({ [instanceNames[i]]: instance.publicIp }))
 );
 export const primaryEniIds = pulumi.output(compute.primaryEnis).apply(enis => 
-    enis.map((eni, i) => ({ [`primaryEni${i+1}`]: eni.id }))
+    enis.map((eni, i) => ({ [`${instanceNames[i]}-primary`]: eni.id }))
 );
 export const secondaryEniIds = pulumi.output(compute.secondaryEnis).apply(enis => 
-    enis.map((eni, i) => ({ [`secondaryEni${i+1}`]: eni.id }))
+    enis.map((eni, i) => ({ [`${instanceNames[i]}-secondary`]: eni.id }))
 );
 
 // Export monitoring outputs if enabled

@@ -97,31 +97,136 @@ export class Compute extends pulumi.ComponentResource {
         this.primaryEnis = [];
         this.secondaryEnis = [];
 
-        for (let i = 1; i <= args.instanceCount; i++) {
-            // Create the primary network interface
-            const primaryEni = new aws.ec2.NetworkInterface(`${name}-primary-eni-${i}`, {
+        // Define instance names and IP addresses
+        const instanceConfigs = [
+            {
+                name: "sockperf-server",
+                hostname: "sockperf-server.zzhe.xyz",
+                primaryIp: "192.168.1.1",
+                secondaryIp: "192.168.1.11",
+                isServer: true
+            },
+            {
+                name: "sockperf-client",
+                hostname: "sockperf-client.zzhe.xyz",
+                primaryIp: "192.168.1.2",
+                secondaryIp: "192.168.1.22",
+                isServer: false
+            }
+        ];
+
+        // Create sockperf installation script (from install-test-tools.sh)
+        const sockperfInstallScript = `#!/bin/bash
+# Script to install sockperf for network performance testing on Amazon Linux 2023
+# For ENA vs ENA Express latency and bandwidth performance testing
+
+set -e
+
+echo "Updating system packages..."
+dnf update -y
+
+echo "Installing dependencies for sockperf..."
+dnf groupinstall -y "Development Tools"
+dnf install -y wget unzip ethtool htop
+
+echo "Downloading and installing sockperf..."
+wget https://github.com/Mellanox/sockperf/archive/refs/tags/3.10.zip
+unzip 3.10.zip
+cd sockperf-3.10
+./autogen.sh
+./configure
+make
+make install
+
+echo "Testing sockperf installation..."
+echo "sockperf version: $(sockperf --version)"
+
+echo "Installation complete!"
+`;
+
+        // Create instances based on the configuration
+        for (let i = 0; i < instanceConfigs.length; i++) {
+            const config = instanceConfigs[i];
+            
+            // Create the primary network interface with fixed IP
+            const primaryEni = new aws.ec2.NetworkInterface(`${name}-primary-eni-${i+1}`, {
                 subnetId: args.subnetId,
                 securityGroups: [args.securityGroupId],
-                description: `Primary ENI for instance ${i}`,
+                privateIps: [config.primaryIp],
+                description: `Primary ENI for ${config.name}`,
                 tags: {
-                    Name: `${args.stackName}-primary-eni-${i}`,
+                    Name: `${args.stackName}-${config.name}-primary-eni`,
                 },
             }, { parent: this });
             this.primaryEnis.push(primaryEni);
 
-            // Create the secondary network interface
-            const secondaryEni = new aws.ec2.NetworkInterface(`${name}-secondary-eni-${i}`, {
+            // Create the secondary network interface with fixed IP
+            const secondaryEni = new aws.ec2.NetworkInterface(`${name}-secondary-eni-${i+1}`, {
                 subnetId: args.subnetId,
                 securityGroups: [args.securityGroupId],
-                description: `Secondary ENI with ENA Express for instance ${i}`,
+                privateIps: [config.secondaryIp],
+                description: `Secondary ENI with ENA Express for ${config.name}`,
                 tags: {
-                    Name: `${args.stackName}-secondary-eni-${i}`,
+                    Name: `${args.stackName}-${config.name}-secondary-eni`,
                 },
             }, { parent: this });
             this.secondaryEnis.push(secondaryEni);
 
+            // Create user data script to set hostname and install sockperf
+            let userData = pulumi.interpolate`#!/bin/bash
+# Set hostname
+hostnamectl set-hostname ${config.hostname}
+echo "127.0.0.1 ${config.hostname}" >> /etc/hosts
+
+# Install sockperf and dependencies
+${sockperfInstallScript}
+
+# Additional server-specific configuration
+${config.isServer ? `
+# Start sockperf server on boot
+cat > /etc/systemd/system/sockperf-server.service << 'EOF'
+[Unit]
+Description=SockPerf Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sockperf server -i 0.0.0.0 --tcp -p 11111
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+systemctl enable sockperf-server
+systemctl start sockperf-server
+
+# Start UDP server as well
+cat > /etc/systemd/system/sockperf-udp-server.service << 'EOF'
+[Unit]
+Description=SockPerf UDP Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sockperf server -i 0.0.0.0 --udp -p 11112
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the UDP service
+systemctl enable sockperf-udp-server
+systemctl start sockperf-udp-server
+` : ''}
+`;
+
             // Create EC2 instance
-            const instance = new aws.ec2.Instance(`${name}-instance-${i}`, {
+            const instance = new aws.ec2.Instance(`${name}-${config.name}`, {
                 ami: ami.id,
                 instanceType: args.instanceType,
                 placementGroup: this.placementGroup.id,
@@ -132,23 +237,23 @@ export class Compute extends pulumi.ComponentResource {
                         deviceIndex: 0,
                     },
                 ],
+                userData: userData.apply(ud => Buffer.from(ud).toString('base64')),
                 iamInstanceProfile: instanceProfile.name,
                 tags: {
-                    Name: `${args.stackName}-instance-${i}`,
+                    Name: `${args.stackName}-${config.name}`,
                 },
             }, { parent: this });
             this.instances.push(instance);
 
             // Attach the secondary ENI to the instance
-            const secondaryEniAttachment = new aws.ec2.NetworkInterfaceAttachment(`${name}-secondary-eni-attachment-${i}`, {
+            const secondaryEniAttachment = new aws.ec2.NetworkInterfaceAttachment(`${name}-secondary-eni-attachment-${i+1}`, {
                 instanceId: instance.id,
                 networkInterfaceId: secondaryEni.id,
                 deviceIndex: 1,
             }, { parent: this });
             
-            // Enable ENA Express on the secondary ENI using AWS CLI
-            // We'll use a custom command to enable ENA Express after deployment
-            const enableEnaExpressCommand = new aws.ec2.Tag(`${name}-ena-express-tag-${i}`, {
+            // Enable ENA Express on the secondary ENI
+            const enableEnaExpressCommand = new aws.ec2.Tag(`${name}-ena-express-tag-${i+1}`, {
                 resourceId: secondaryEni.id,
                 key: "EnableEnaExpress",
                 value: "true",
