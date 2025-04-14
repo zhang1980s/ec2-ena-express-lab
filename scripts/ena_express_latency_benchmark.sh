@@ -207,6 +207,12 @@ extract_metrics() {
 check_sockperf_server "${REMOTE_IP_ENI}" "${REMOTE_PORT_ENI}" "ENI" || exit 1
 check_sockperf_server "${REMOTE_IP_SRD}" "${REMOTE_PORT_SRD}" "SRD" || exit 1
 
+# Record test start time
+TEST_START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+echo "========================================================"
+echo "Test started at: ${TEST_START_TIME}"
+echo "========================================================"
+
 # Main test loop
 for ((i = 0; i < ITERATIONS; i++)); do
     PORT_ENI_BASE=$((BASE_PORT + i * 2))
@@ -338,6 +344,12 @@ for ((i = 0; i < ITERATIONS; i++)); do
     fi
 done
 
+# Record test end time
+TEST_END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+echo "========================================================"
+echo "Test ended at: ${TEST_END_TIME}"
+echo "========================================================"
+
 # Generate summary report
 echo "Tests completed. Generating summary report..."
 
@@ -412,6 +424,8 @@ SUMMARY_REPORT="${OUTPUT_DIR}/summary_report.txt"
     echo "          ENA vs ENA Express Performance Summary        "
     echo "========================================================"
     echo "Test Date: $(date)"
+    echo "Test Start Time: ${TEST_START_TIME}"
+    echo "Test End Time: ${TEST_END_TIME}"
     echo "Total Iterations: ${ITERATIONS}"
     echo "Repeats per Iteration: ${REPEAT}"
     echo "Total Tests: $((ITERATIONS * REPEAT))"
