@@ -17,16 +17,16 @@ This guide outlines a test environment for comparing network latency performance
 graph TD
     VPC["VPC (192.168.0.0/16)"] --> Subnet["Public Subnet (192.168.1.0/24)"]
     Subnet --> PG["Cluster Placement Group"]
-    PG --> EC2A["EC2 Instance A (c6i.8xlarge)"]
-    PG --> EC2B["EC2 Instance B (c6i.8xlarge)"]
-    EC2A --> ENI1A["Primary ENI (Standard ENA)"]
-    EC2A --> ENI2A["Secondary ENI (ENA Express + UDP)"]
-    EC2B --> ENI1B["Primary ENI (Standard ENA)"]
-    EC2B --> ENI2B["Secondary ENI (ENA Express + UDP)"]
-    SG["Security Group"] --> EC2A
-    SG --> EC2B
-    IAM["IAM Role (SSM Access)"] --> EC2A
-    IAM["IAM Role (SSM Access)"] --> EC2B
+    PG --> SERVER["sockperf-server (c6i.8xlarge)"]
+    PG --> CLIENT["sockperf-client (c6i.8xlarge)"]
+    SERVER --> ENI1S["Primary ENI (192.168.1.1)"]
+    SERVER --> ENI2S["Secondary ENI (192.168.1.11) with ENA Express"]
+    CLIENT --> ENI1C["Primary ENI (192.168.1.2)"]
+    CLIENT --> ENI2C["Secondary ENI (192.168.1.22) with ENA Express"]
+    SG["Security Group"] --> SERVER
+    SG --> CLIENT
+    IAM["IAM Role (SSM Access)"] --> SERVER
+    IAM["IAM Role (SSM Access)"] --> CLIENT
 ```
 
 - **VPC and Networking**: A dedicated VPC with a public subnet for test isolation
@@ -154,15 +154,16 @@ pulumi/
    - Instance IDs and Public IPs
    - ENI IDs (with ENA Express already enabled)
 
-6. Make the testing scripts executable:
-   ```bash
-   chmod +x scripts/install-test-tools.sh scripts/run-performance-tests.sh
-   ```
-
-7. Transfer the scripts to your EC2 instances using SCP or AWS Systems Manager:
+6. Transfer the testing scripts to your EC2 instances using SCP or AWS Systems Manager:
    ```bash
    # Example using SCP
-   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/* ec2-user@[instance-ip]:/home/ec2-user/
+   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/ena_express_latency_benchmark.sh ec2-user@[instance-ip]:/home/ec2-user/
+   ```
+
+7. Connect to the instances using SSH or Systems Manager:
+   ```bash
+   # Example using SSH
+   ssh -i /path/to/keypair-sandbox0-sin-mymac.pem ec2-user@[instance-ip]
    ```
 
 For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/README.md).
@@ -173,39 +174,26 @@ For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/
 - AWS CLI configured with appropriate permissions
 - sockperf installed on both instances (for both latency and throughput testing of TCP and UDP)
 
-### Installation of Testing Tools
+### Testing Tools
 
-Connect to your instances using SSH or Systems Manager Session Manager and install sockperf using the provided script:
+The sockperf tool is automatically installed on both instances during deployment via user data scripts. This eliminates the need for manual installation steps and ensures that both instances are ready for testing immediately after deployment.
+
+#### What's Installed Automatically
+
+- **sockperf**: A comprehensive network performance measurement tool for TCP and UDP
+- **Development tools**: Required for building and running sockperf
+- **Monitoring utilities**: Tools like htop and ethtool for system monitoring
+- **Systemd services**: Pre-configured services for sockperf servers (on sockperf-server instance)
+
+#### Verifying the Installation
+
+You can verify that sockperf is properly installed by connecting to either instance via SSH or Systems Manager Session Manager and running:
 
 ```bash
-# Make the script executable if not already done
-chmod +x install-test-tools.sh
-
-# Run the installation script
-./install-test-tools.sh
+sockperf --version
 ```
 
-The script will install sockperf, which is a comprehensive network performance measurement tool that can test both latency and throughput for TCP and UDP.
-
-If you prefer to install sockperf manually, you can use the following commands:
-
-```bash
-# Update system packages
-sudo dnf update -y
-
-# Install dependencies for sockperf
-sudo dnf groupinstall -y "Development Tools"
-sudo dnf install -y wget unzip ethtool htop
-
-# Download and install sockperf
-wget https://github.com/Mellanox/sockperf/archive/refs/tags/3.10.zip
-unzip 3.10.zip
-cd sockperf-3.10
-./autogen.sh
-./configure
-make
-sudo make install
-```
+This should display the installed version of sockperf (3.10).
 
 ### Running Performance Tests
 
@@ -283,7 +271,7 @@ Maximum Latency:
 
 The `run-performance-tests.sh` script automates a broader set of performance tests:
 
-1. On the server instance (Instance B):
+1. On the sockperf-server instance:
    ```bash
    # Make the script executable if not already done
    chmod +x run-performance-tests.sh
@@ -292,19 +280,19 @@ The `run-performance-tests.sh` script automates a broader set of performance tes
    ./run-performance-tests.sh server
    ```
 
-2. On the client instance (Instance A):
+2. On the sockperf-client instance:
    ```bash
    # Make the script executable if not already done
    chmod +x run-performance-tests.sh
    
    # Run tests against the standard ENA interface
-   ./run-performance-tests.sh client [Instance-B-Primary-IP] ena
+   ./run-performance-tests.sh client 192.168.1.1 ena
    
    # Run tests against the ENA Express interface
-   ./run-performance-tests.sh client [Instance-B-Secondary-IP] ena-express
+   ./run-performance-tests.sh client 192.168.1.11 ena-express
    
    # Or run both test sets
-   ./run-performance-tests.sh client [Instance-B-IP]
+   ./run-performance-tests.sh client 192.168.1.1
    ```
 
 The script will:
@@ -321,52 +309,52 @@ If you prefer to run tests manually, you can use the following sockperf commands
 
 **TCP Latency Tests:**
 ```bash
-# On Instance B (server)
-sockperf server --tcp -p 11111
+# On sockperf-server (automatically started via systemd)
+# The server is already running on port 11111
 
-# On Instance A (client) - Standard ENA
-sockperf ping-pong --tcp -i [Instance-B-Primary-IP] -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena.csv
+# On sockperf-client - Standard ENA
+sockperf ping-pong --tcp -i 192.168.1.1 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena.csv
 
-# On Instance A (client) - ENA Express
-sockperf ping-pong --tcp -i [Instance-B-Secondary-IP] -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena_express.csv
+# On sockperf-client - ENA Express
+sockperf ping-pong --tcp -i 192.168.1.11 -p 11111 -t 60 -m 64 --full-log sockperf_tcp_latency_ena_express.csv
 ```
 
 **UDP Latency Tests:**
 ```bash
-# On Instance B (server)
-sockperf server --udp -p 11112
+# On sockperf-server (automatically started via systemd)
+# The server is already running on port 11112
 
-# On Instance A (client) - Standard ENA
-sockperf ping-pong --udp -i [Instance-B-Primary-IP] -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena.csv
+# On sockperf-client - Standard ENA
+sockperf ping-pong --udp -i 192.168.1.1 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena.csv
 
-# On Instance A (client) - ENA Express
-sockperf ping-pong --udp -i [Instance-B-Secondary-IP] -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena_express.csv
+# On sockperf-client - ENA Express
+sockperf ping-pong --udp -i 192.168.1.11 -p 11112 -t 60 -m 64 --full-log sockperf_udp_latency_ena_express.csv
 ```
 
 ##### 2. Throughput Tests
 
 **TCP Throughput Tests:**
 ```bash
-# On Instance B (server)
+# On sockperf-server
 sockperf server --tcp -p 11113
 
-# On Instance A (client) - Standard ENA
-sockperf throughput --tcp -i [Instance-B-Primary-IP] -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena.csv
+# On sockperf-client - Standard ENA
+sockperf throughput --tcp -i 192.168.1.1 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena.csv
 
-# On Instance A (client) - ENA Express
-sockperf throughput --tcp -i [Instance-B-Secondary-IP] -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena_express.csv
+# On sockperf-client - ENA Express
+sockperf throughput --tcp -i 192.168.1.11 -p 11113 -t 60 -m 1472 --full-log sockperf_tcp_throughput_ena_express.csv
 ```
 
 **UDP Throughput Tests:**
 ```bash
-# On Instance B (server)
+# On sockperf-server
 sockperf server --udp -p 11114
 
-# On Instance A (client) - Standard ENA
-sockperf throughput --udp -i [Instance-B-Primary-IP] -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena.csv
+# On sockperf-client - Standard ENA
+sockperf throughput --udp -i 192.168.1.1 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena.csv
 
-# On Instance A (client) - ENA Express
-sockperf throughput --udp -i [Instance-B-Secondary-IP] -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena_express.csv
+# On sockperf-client - ENA Express
+sockperf throughput --udp -i 192.168.1.11 -p 11114 -t 60 -m 1472 --full-log sockperf_udp_throughput_ena_express.csv
 ```
 
 ### Metrics to Collect
@@ -456,8 +444,8 @@ This project includes a monitoring infrastructure based on Prometheus and Grafan
 
 ```mermaid
 graph TD
-    EC2A["EC2 Instance A"] --> |Metrics| Exporter1["sockperf Exporter"]
-    EC2B["EC2 Instance B"] --> |Metrics| Exporter2["sockperf Exporter"]
+    CLIENT["sockperf-client"] --> |Metrics| Exporter1["sockperf Exporter"]
+    SERVER["sockperf-server"] --> |Metrics| Exporter2["sockperf Exporter"]
     Exporter1 --> |Scrape| Prometheus["Prometheus"]
     Exporter2 --> |Scrape| Prometheus
     Prometheus --> |Query| Grafana["Grafana Dashboard"]
