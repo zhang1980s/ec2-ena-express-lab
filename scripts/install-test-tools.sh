@@ -9,7 +9,7 @@ sudo dnf update -y
 
 echo "Installing dependencies for sockperf..."
 sudo dnf groupinstall -y "Development Tools"
-sudo dnf install -y wget unzip
+sudo dnf install -y wget unzip ethtool htop
 
 echo "Downloading and installing sockperf..."
 wget https://github.com/Mellanox/sockperf/archive/refs/tags/3.10.zip

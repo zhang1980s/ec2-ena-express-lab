@@ -204,7 +204,15 @@ You can run the performance tests using the provided scripts or manually with so
 The `ena_express_latency_benchmark.sh` script is a specialized tool for comparing UDP latency performance between standard ENA and ENA Express:
 
 ```bash
-# Run the benchmark script
+# Run the sockperf server on sockperf-server
+
+## on first terminal
+sockperf server -i 192.168.3.10 -p 11110
+
+## on second terminal
+sockperf server -i 192.168.3.11 -p 11111
+
+# Run the ena_express_latency_benchmark.sh on sockperf-client
 ./ena_express_latency_benchmark.sh [--debug]
 ```
 
