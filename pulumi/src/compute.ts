@@ -28,8 +28,8 @@ export class Compute extends pulumi.ComponentResource {
             },
         }, { parent: this });
 
-        // Create IAM role for SSM access
-        this.instanceRole = new aws.iam.Role(`${name}-role`, {
+        // First create the IAM role without any dependencies
+        const tempRole = new aws.iam.Role(`${name}-role-temp`, {
             assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
                 Service: "ec2.amazonaws.com",
             }),
@@ -40,9 +40,32 @@ export class Compute extends pulumi.ComponentResource {
 
         // Attach SSM managed policy
         const ssmPolicyAttachment = new aws.iam.RolePolicyAttachment(`${name}-ssm-policy`, {
-            role: this.instanceRole.name,
+            role: tempRole.name,
             policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
         }, { parent: this });
+
+        // Now create the final role with dependency on the policy attachment
+        // This ensures the policy is detached before the role is deleted
+        this.instanceRole = new aws.iam.Role(`${name}-role`, {
+            assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
+                Service: "ec2.amazonaws.com",
+            }),
+            tags: {
+                Name: `${args.stackName}-ec2-role`,
+            },
+        }, { 
+            parent: this,
+            dependsOn: [ssmPolicyAttachment]
+        });
+
+        // Update the policy attachment to use the final role
+        const finalPolicyAttachment = new aws.iam.RolePolicyAttachment(`${name}-final-ssm-policy`, {
+            role: this.instanceRole.name,
+            policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        }, { 
+            parent: this,
+            deleteBeforeReplace: true  // Ensure this is deleted before the role is replaced
+        });
 
         // Create instance profile
         const instanceProfile = new aws.iam.InstanceProfile(`${name}-instance-profile`, {
