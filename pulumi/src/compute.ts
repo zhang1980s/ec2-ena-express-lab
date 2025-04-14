@@ -186,49 +186,6 @@ echo "Downloading ena_express_latency_benchmark.sh script from GitHub..."
 wget https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.sh
 chmod +x ena_express_latency_benchmark.sh
 echo "Download complete."
-
-# Additional server-specific configuration
-${config.isServer ? `
-# Start sockperf server on boot
-cat > /etc/systemd/system/sockperf-server.service << 'EOF'
-[Unit]
-Description=SockPerf Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/sockperf server -i 0.0.0.0 --tcp -p 11111
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Enable and start the service
-systemctl enable sockperf-server
-systemctl start sockperf-server
-
-# Start UDP server as well
-cat > /etc/systemd/system/sockperf-udp-server.service << 'EOF'
-[Unit]
-Description=SockPerf UDP Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/sockperf server -i 0.0.0.0 --udp -p 11112
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Enable and start the UDP service
-systemctl enable sockperf-udp-server
-systemctl start sockperf-udp-server
-` : ''}
 `;
 
             // Create EC2 instance
