@@ -194,7 +194,8 @@ If you prefer to install sockperf manually, you can use the following commands:
 sudo dnf update -y
 
 # Install dependencies for sockperf
-sudo dnf install -y gcc make automake autoconf libtool wget unzip
+sudo dnf groupinstall -y "Development Tools"
+sudo dnf install -y wget unzip ethtool htop
 
 # Download and install sockperf
 wget https://github.com/Mellanox/sockperf/archive/refs/tags/3.10.zip
@@ -509,6 +510,45 @@ The dashboard includes:
 - **Prometheus Configuration**: Edit `monitoring/config/prometheus.yml` to adjust scrape intervals or add new targets
 - **Grafana Dashboard**: Edit `monitoring/config/sockperf-dashboard.json` to customize the dashboard layout or add new panels
 - **sockperf Exporter**: Modify `monitoring/exporter/sockperf_exporter.py` to extract additional metrics or change the parsing logic
+
+## Recent Project Updates
+
+### April 2025 Updates
+
+The project has been updated with the following improvements:
+
+#### 1. EC2 Instance Naming and Configuration
+
+- Renamed EC2 instances for clarity:
+  - `sockperf-server`: Runs the sockperf server components
+  - `sockperf-client`: Runs the sockperf client for testing
+
+- Fixed private IP addresses for consistent networking:
+  - `sockperf-server` primary ENI: 192.168.1.1
+  - `sockperf-server` secondary ENI: 192.168.1.11 (ENA Express enabled)
+  - `sockperf-client` primary ENI: 192.168.1.2
+  - `sockperf-client` secondary ENI: 192.168.1.22 (ENA Express enabled)
+
+#### 2. Automated Installation and Configuration
+
+- Moved `install-test-tools.sh` logic into EC2 user data for automatic setup
+- Added automatic hostname configuration:
+  - Server: `sockperf-server.zzhe.xyz`
+  - Client: `sockperf-client.zzhe.xyz`
+
+#### 3. SockPerf Server Automation
+
+- Added systemd services for sockperf servers:
+  - TCP server on port 11111
+  - UDP server on port 11112
+- Configured automatic startup on boot
+- Implemented proper service restart policies
+
+#### 4. IAM Role Dependency Improvements
+
+- Fixed IAM role dependency issues for clean resource deletion
+- Added proper ordering for policy attachments and role deletion
+- Implemented safeguards to prevent deletion failures
 
 ## Cleanup
 
