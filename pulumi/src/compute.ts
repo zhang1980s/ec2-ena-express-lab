@@ -172,7 +172,39 @@ echo "Installation complete!"
             }, { parent: this });
             this.secondaryEnis.push(secondaryEni);
 
-            // Create user data script to set hostname and install sockperf
+            // Create node_exporter installation script
+            const nodeExporterInstallScript = `
+# Install node_exporter
+echo "Installing node_exporter..."
+wget https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
+tar xvfz node_exporter-1.6.1.linux-amd64.tar.gz
+sudo mv node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin/
+sudo useradd -rs /bin/false node_exporter
+
+# Create systemd service
+cat > /etc/systemd/system/node_exporter.service << 'EOF'
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable node_exporter
+sudo systemctl start node_exporter
+echo "node_exporter installation complete."
+`;
+
+            // Create user data script to set hostname and install sockperf and node_exporter
             let userData = pulumi.interpolate`#!/bin/bash
 # Set hostname
 hostnamectl set-hostname ${config.hostname}
@@ -186,6 +218,9 @@ echo "Downloading ena_express_latency_benchmark.sh script from GitHub..."
 wget https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.sh
 chmod +x ena_express_latency_benchmark.sh
 echo "Download complete."
+
+# Install node_exporter
+${nodeExporterInstallScript}
 `;
 
             // Create EC2 instance
