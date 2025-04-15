@@ -180,10 +180,14 @@ The sockperf tool is automatically installed on both instances during deployment
 
 #### What's Installed Automatically
 
+The following software is installed automatically via AWS Systems Manager State Manager:
+
 - **sockperf**: A comprehensive network performance measurement tool for TCP and UDP
 - **Development tools**: Required for building and running sockperf
 - **Monitoring utilities**: Tools like htop and ethtool for system monitoring
 - **node_exporter**: Prometheus exporter for hardware and OS metrics (runs on port 9100)
+
+Using Systems Manager State Manager ensures that the software remains installed and properly configured even if instances are restarted or if the configuration drifts over time.
 
 #### Verifying the Installation
 
@@ -516,7 +520,14 @@ The project has been updated with the following improvements:
 - Exposes system metrics on port 9100 for Prometheus to scrape
 - Provides detailed hardware and OS metrics for performance analysis during tests
 
-#### 5. IAM Role Dependency Improvements
+#### 5. Systems Manager State Manager Integration
+
+- Moved software installation from user data to AWS Systems Manager State Manager
+- Created SSM documents for sockperf installation, node_exporter setup, and benchmark script download
+- Configured State Manager associations to ensure consistent software state
+- Improved reliability and maintainability of the infrastructure
+
+#### 6. IAM Role Dependency Improvements
 
 - Fixed IAM role dependency issues for clean resource deletion
 - Added proper ordering for policy attachments and role deletion
