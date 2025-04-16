@@ -33,6 +33,7 @@ ITERATIONS=1
 REPEAT=1  # Number of times to repeat each test
 TEST_DURATION=600  # Test duration in seconds
 PRE_WARM_WAIT=60  # Pre-warmup wait time in seconds
+MPS=max #Set number of messages-per-second (default = 10000 - for under-load mode, or max - for ping-pong and throughput modes; for maximum use --mps=max; origin script: mps=100
 
 # Create output directories and files
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -106,7 +107,7 @@ run_sockperf() {
     # Run sockperf UDP test
     sockperf ping-pong -i "${remote_ip}" -p "${remote_port}" \
         --client_ip "${local_ip}" --client_port "${local_port}" \
-        --time ${TEST_DURATION} --msg-size 64 --mps 100 \
+        --time ${TEST_DURATION} --msg-size 64 --mps ${MPS} \
         --pre-warmup-wait ${PRE_WARM_WAIT} > "${output_file}" 2>&1
     
     # Check if the command succeeded

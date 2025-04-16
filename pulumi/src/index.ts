@@ -3,6 +3,7 @@ import { enaExpressLabConfig } from "./config";
 import { Networking } from "./networking";
 import { Compute } from "./compute";
 import { Monitoring } from "./monitoring";
+import { StateManager } from "./stateManager";
 
 // Create networking resources
 const networking = new Networking("networking", {
@@ -19,6 +20,12 @@ const compute = new Compute("compute", {
     instanceType: enaExpressLabConfig.instanceType,
     keyPairName: enaExpressLabConfig.keyPairName,
     instanceCount: enaExpressLabConfig.instanceCount,
+});
+
+// Create State Manager resources for software installation and configuration
+const stateManager = new StateManager("statemanager", {
+    stackName: enaExpressLabConfig.stackName,
+    instances: compute.instances,
 });
 
 // Create monitoring resources if enabled
