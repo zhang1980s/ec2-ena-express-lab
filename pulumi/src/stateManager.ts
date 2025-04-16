@@ -132,11 +132,13 @@ export class StateManager extends pulumi.ComponentResource {
                         inputs: {
                             runCommand: [
                                 "#!/bin/bash",
-                                "# Download the ena_express_latency_benchmark.sh script",
+                                "# Download the ena_express_latency_benchmark.sh script to ec2-user's home directory",
                                 "echo \"Downloading ena_express_latency_benchmark.sh script from GitHub...\"",
+                                "cd /home/ec2-user",
                                 "wget https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.sh",
                                 "chmod +x ena_express_latency_benchmark.sh",
-                                "echo \"Download complete.\""
+                                "chown ec2-user:ec2-user ena_express_latency_benchmark.sh",
+                                "echo \"Download complete. Script is available at /home/ec2-user/ena_express_latency_benchmark.sh\""
                             ]
                         }
                     }
