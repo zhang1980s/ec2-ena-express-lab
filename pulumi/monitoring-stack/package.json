@@ -1,7 +1,7 @@
 {
-  "name": "ec2-ena-express-lab",
+  "name": "ec2-ena-express-monitoring-stack",
   "version": "1.0.0",
-  "description": "Infrastructure for ENA vs ENA Express latency performance testing",
+  "description": "Monitoring infrastructure for ENA vs ENA Express latency performance testing",
   "main": "bin/index.js",
   "scripts": {
     "build": "tsc",
@@ -14,12 +14,13 @@
     "ena",
     "ena-express",
     "performance",
-    "testing"
+    "testing",
+    "monitoring"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@pulumi/aws": "^6.0.0",
+    "@pulumi/aws": "6.66.3",
     "@pulumi/awsx": "^2.0.0",
     "@pulumi/pulumi": "^3.0.0"
   },

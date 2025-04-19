@@ -1,0 +1,29 @@
+{
+  "name": "ec2-ena-express-network-stack",
+  "version": "1.0.0",
+  "description": "Network infrastructure for ENA vs ENA Express latency performance testing",
+  "main": "bin/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "pulumi",
+    "aws",
+    "ena",
+    "ena-express",
+    "performance",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@pulumi/aws": "6.66.3",
+    "@pulumi/pulumi": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

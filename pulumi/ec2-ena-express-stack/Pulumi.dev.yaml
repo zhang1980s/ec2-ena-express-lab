@@ -1,0 +1,3 @@
+config:
+  aws:region: us-east-1
+  ec2-ena-express-compute:networkStackName: dev

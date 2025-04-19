@@ -7,7 +7,7 @@ export interface MonitoringArgs {
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<string>[];
     grafanaPassword: string;
-    testInstanceIps?: pulumi.Input<string>[];
+    testInstanceIps?: string[];
 }
 
 export class Monitoring extends pulumi.ComponentResource {

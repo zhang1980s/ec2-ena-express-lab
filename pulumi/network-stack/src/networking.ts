@@ -30,23 +30,13 @@ export class Networking extends pulumi.ComponentResource {
         // Create public subnets in multiple availability zones
         this.subnets = [];
         
-        // Calculate CIDR blocks for subnets
-        const cidrParts = args.subnetCidr.split('/');
-        const baseIp = cidrParts[0];
-        const prefix = parseInt(cidrParts[1], 10);
-        
         // Create subnets in the first two availability zones
         const availabilityZones = pulumi.output(aws.getAvailabilityZones()).names;
         
-        // First subnet - use a different CIDR to avoid conflicts
-        // For example, if args.subnetCidr is 192.168.1.0/24, we'll use 192.168.3.0/24
-        const ipParts = baseIp.split('.');
-        const firstSubnetOctet = parseInt(ipParts[2], 10) + 2; // Use +2 to avoid conflicts
-        const subnet1Cidr = `${ipParts[0]}.${ipParts[1]}.${firstSubnetOctet}.0/${prefix}`;
-        
+        // Use the exact subnet CIDR from the configuration (192.168.3.0/24)
         const subnet1 = new aws.ec2.Subnet(`${name}-subnet-1`, {
             vpcId: this.vpc.id,
-            cidrBlock: subnet1Cidr,
+            cidrBlock: args.subnetCidr, // Use the exact CIDR from config (192.168.3.0/24)
             mapPublicIpOnLaunch: true,
             availabilityZone: availabilityZones[0],
             tags: {
@@ -55,10 +45,12 @@ export class Networking extends pulumi.ComponentResource {
         }, { parent: this });
         this.subnets.push(subnet1);
         
-        // Second subnet - calculate a new CIDR block
-        // For example, if first subnet is 192.168.3.0/24, we'll use 192.168.4.0/24
-        const secondSubnetOctet = firstSubnetOctet + 1;
-        const subnet2Cidr = `${ipParts[0]}.${ipParts[1]}.${secondSubnetOctet}.0/${prefix}`;
+        // Calculate a second subnet CIDR for the second AZ
+        // If the first subnet is 192.168.3.0/24, use 192.168.4.0/24
+        const ipParts = args.subnetCidr.split('.');
+        const cidrSuffix = ipParts[3].split('/')[1]; // Extract the prefix (e.g., "24")
+        const secondSubnetOctet = parseInt(ipParts[2], 10) + 1;
+        const subnet2Cidr = `${ipParts[0]}.${ipParts[1]}.${secondSubnetOctet}.0/${cidrSuffix}`;
         
         const subnet2 = new aws.ec2.Subnet(`${name}-subnet-2`, {
             vpcId: this.vpc.id,

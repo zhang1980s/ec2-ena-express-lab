@@ -21,7 +21,7 @@ debug_echo() {
     fi
 }
 
-# IP and port configurations
+# IP and port configurations as per README.md
 REMOTE_IP_ENI=192.168.3.10
 REMOTE_IP_SRD=192.168.3.11
 REMOTE_PORT_ENI=11110

@@ -91,27 +91,54 @@ The project uses Pulumi with TypeScript, which offers several advantages:
 
 1. **Direct ENA Express Support**: Pulumi directly supports enabling ENA Express on network interfaces, eliminating the need for post-deployment AWS CLI commands.
 
-2. **Modular Architecture**: The infrastructure is organized into reusable components (networking, compute, monitoring) following Pulumi best practices.
+2. **Modular Architecture**: The infrastructure is organized into three separate stacks (networking, compute, monitoring) following Pulumi best practices.
 
 3. **Type Safety**: Full TypeScript support with proper typing for better code quality and IDE assistance.
 
 4. **Simplified Configuration**: Easy configuration management through Pulumi's built-in config system.
 
+5. **Stack References**: Enables sharing outputs between stacks for proper dependency management.
+
 #### Project Structure
+
+The project is organized into three separate Pulumi stacks:
 
 ```
 pulumi/
-├── Pulumi.yaml           # Project configuration
-├── Pulumi.dev.yaml       # Dev stack configuration
-├── package.json          # Node.js dependencies
-├── tsconfig.json         # TypeScript configuration
-└── src/
-    ├── index.ts          # Main entry point
-    ├── config.ts         # Configuration handling
-    ├── networking.ts     # VPC, subnet, security group
-    ├── compute.ts        # EC2 instances, ENIs with ENA Express
-    └── monitoring.ts     # Prometheus and Grafana monitoring
+├── network-stack/           # Network infrastructure stack
+│   ├── Pulumi.yaml          # Stack configuration
+│   ├── package.json         # Dependencies
+│   ├── tsconfig.json        # TypeScript configuration
+│   └── src/
+│       ├── index.ts         # Main entry point
+│       ├── config.ts        # Configuration handling
+│       └── networking.ts    # VPC, subnet, security group
+│
+├── ec2-ena-express-stack/   # Compute resources stack
+│   ├── Pulumi.yaml          # Stack configuration
+│   ├── package.json         # Dependencies
+│   ├── tsconfig.json        # TypeScript configuration
+│   └── src/
+│       ├── index.ts         # Main entry point
+│       ├── config.ts        # Configuration handling
+│       └── compute.ts       # EC2 instances, ENIs with ENA Express
+│
+└── monitoring-stack/        # Monitoring infrastructure stack
+    ├── Pulumi.yaml          # Stack configuration
+    ├── package.json         # Dependencies
+    ├── tsconfig.json        # TypeScript configuration
+    └── src/
+        ├── index.ts         # Main entry point
+        ├── config.ts        # Configuration handling
+        └── monitoring.ts    # Prometheus and Grafana monitoring
 ```
+
+#### Stack Dependencies
+
+The stacks have the following dependencies:
+- **Network Stack**: No dependencies (base infrastructure)
+- **EC2 ENA Express Stack**: Depends on network stack
+- **Monitoring Stack**: Depends on both network and compute stacks
 
 #### Deployment Steps
 
@@ -120,12 +147,7 @@ pulumi/
    curl -fsSL https://get.pulumi.com | sh
    ```
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Configure AWS credentials:
+2. Configure AWS credentials:
    ```bash
    aws configure
    # or
@@ -133,40 +155,58 @@ pulumi/
    export AWS_SECRET_ACCESS_KEY=<your-secret-key>
    ```
 
-4. Deploy the stack using the deployment script:
+3. Deploy the stacks using the deployment script:
    ```bash
    ./deploy.sh <account-id> <region> [options]
    ```
 
    Options:
-   - `--with-monitoring`: Deploy the monitoring infrastructure
+   - `--network`: Deploy only the network stack
+   - `--compute-ena-express`: Deploy only the compute stack
+   - `--monitoring`: Deploy only the monitoring stack
+   - `--all`: Deploy all stacks (default)
    - `--stack <name>`: Use a specific stack name (default: dev)
+   - `destroy`: Destroy the specified stack(s) instead of deploying
 
-   Example:
+   Examples:
    ```bash
-   ./deploy.sh 123456789012 us-east-1 --with-monitoring
+   # Deploy all stacks
+   ./deploy.sh 123456789012 us-east-1
+
+   # Deploy only the network stack
+   ./deploy.sh 123456789012 us-east-1 --network
+
+   # Deploy only the compute stack
+   ./deploy.sh 123456789012 us-east-1 --compute-ena-express
+
+   # Deploy only the monitoring stack
+   ./deploy.sh 123456789012 us-east-1 --monitoring
+
+   # Destroy all stacks
+   ./deploy.sh 123456789012 us-east-1 --all destroy
+
+   # Destroy a specific stack
+   ./deploy.sh 123456789012 us-east-1 --network destroy
    ```
 
-5. Note the outputs from the deployment, which include:
+4. Note the outputs from the deployment, which include:
    - VPC ID
    - Security Group ID
    - Placement Group ID
    - Instance IDs and Public IPs
    - ENI IDs (with ENA Express already enabled)
 
-6. Transfer the testing scripts to your EC2 instances using SCP or AWS Systems Manager:
+5. Transfer the testing scripts to your EC2 instances using SCP or AWS Systems Manager:
    ```bash
    # Example using SCP
    scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/ena_express_latency_benchmark.sh ec2-user@[instance-ip]:/home/ec2-user/
    ```
 
-7. Connect to the instances using SSH or Systems Manager:
+6. Connect to the instances using SSH or Systems Manager:
    ```bash
    # Example using SSH
    ssh -i /path/to/keypair-sandbox0-sin-mymac.pem ec2-user@[instance-ip]
    ```
-
-For more details on the Pulumi implementation, see the [Pulumi README](./pulumi/README.md).
 
 ## Testing Methodology
 
@@ -440,9 +480,9 @@ graph TD
 
 ### Deploying the Monitoring Infrastructure
 
-1. Deploy the monitoring stack along with the main infrastructure:
+1. Deploy the monitoring stack:
    ```bash
-   ./deploy.sh <account-id> <region> --with-monitoring
+   ./deploy.sh <account-id> <region> --monitoring
    ```
 
 2. Note the outputs from the deployment, which include:
@@ -487,7 +527,20 @@ The dashboard includes:
 
 The project has been updated with the following improvements:
 
-#### 1. EC2 Instance Naming and Configuration
+#### 1. Multi-Stack Architecture
+
+- Refactored the project into three separate Pulumi stacks:
+  - **Network Stack**: VPC, subnets, security groups, etc.
+  - **EC2 ENA Express Stack**: EC2 instances, ENIs, placement group
+  - **Monitoring Stack**: Prometheus, Grafana, ECR repository
+
+- Added stack references to share outputs between stacks:
+  - EC2 stack references the network stack
+  - Monitoring stack references both network and compute stacks
+
+- Updated deployment script to handle deploying specific stacks or all stacks
+
+#### 2. EC2 Instance Naming and Configuration
 
 - Renamed EC2 instances for clarity:
   - `sockperf-server`: Runs the sockperf server components
@@ -499,35 +552,35 @@ The project has been updated with the following improvements:
   - `sockperf-client` primary ENI: 192.168.3.20
   - `sockperf-client` secondary ENI: 192.168.3.21 (ENA Express enabled)
 
-#### 2. Automated Installation and Configuration
+#### 3. Automated Installation and Configuration
 
 - Moved `install-test-tools.sh` logic into EC2 user data for automatic setup
 - Added automatic hostname configuration:
   - Server: `sockperf-server.zzhe.xyz`
   - Client: `sockperf-client.zzhe.xyz`
 
-#### 3. Manual SockPerf Server Operation
+#### 4. Manual SockPerf Server Operation
 
 - Sockperf servers need to be manually started on the server instance:
   - For standard ENA testing: `sockperf server -i 192.168.3.10 -p 11110`
   - For ENA Express testing: `sockperf server -i 192.168.3.11 -p 11111`
 - This allows for more flexibility in testing different configurations
 
-#### 4. System Monitoring with node_exporter
+#### 5. System Monitoring with node_exporter
 
 - Added automatic installation of node_exporter on both instances
 - Configured as a systemd service that starts automatically on boot
 - Exposes system metrics on port 9100 for Prometheus to scrape
 - Provides detailed hardware and OS metrics for performance analysis during tests
 
-#### 5. Systems Manager State Manager Integration
+#### 6. Systems Manager State Manager Integration
 
 - Moved software installation from user data to AWS Systems Manager State Manager
 - Created SSM documents for sockperf installation, node_exporter setup, and benchmark script download
 - Configured State Manager associations to ensure consistent software state
 - Improved reliability and maintainability of the infrastructure
 
-#### 6. IAM Role Dependency Improvements
+#### 7. IAM Role Dependency Improvements
 
 - Fixed IAM role dependency issues for clean resource deletion
 - Added proper ordering for policy attachments and role deletion
@@ -546,29 +599,21 @@ To avoid ongoing charges, clean up the infrastructure when testing is complete:
 
 ### Cleaning up Pulumi Resources
 
-You can destroy the Pulumi stack using one of these methods:
+You can destroy the Pulumi stacks using the deployment script:
 
-**Option 1: Using the deployment script**
 ```bash
-./deploy.sh <account-id> <region> destroy
+# Destroy all stacks
+./deploy.sh <account-id> <region> --all destroy
+
+# Destroy specific stacks
+./deploy.sh <account-id> <region> --monitoring destroy
+./deploy.sh <account-id> <region> --compute-ena-express destroy
+./deploy.sh <account-id> <region> --network destroy
 ```
 
 Example:
 ```bash
-./deploy.sh 123456789012 us-east-1 destroy
-```
-
-**Option 2: Using Pulumi CLI directly**
-```bash
-cd pulumi
-pulumi destroy
-```
-
-**Option 3: Destroy a specific stack**
-```bash
-cd pulumi
-pulumi stack select <stack-name>
-pulumi destroy
+./deploy.sh 123456789012 us-east-1 --all destroy
 ```
 
 ---

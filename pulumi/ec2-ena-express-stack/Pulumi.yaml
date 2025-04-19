@@ -1,0 +1,3 @@
+name: ec2-ena-express-compute
+runtime: nodejs
+description: Compute infrastructure for ENA vs ENA Express latency performance testing
