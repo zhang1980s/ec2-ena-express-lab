@@ -154,35 +154,91 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
         with open(latency_file, 'r') as f:
             content = f.read()
             
-            # Extract average latency
-            avg_match = re.search(r"avg-lat=([0-9.]+)", content)
-            if avg_match:
-                metrics["avg_latency"] = avg_match.group(1)
+            # Try multiple patterns for average latency
+            avg_patterns = [
+                r"avg-lat=([0-9.]+)",
+                r"Summary: Latency is ([0-9.]+)",
+                r"Average latency.*: ([0-9.]+)",
+                r"avg.*latency.*: ([0-9.]+)",
+                r"average.*: ([0-9.]+)",
+                r"latency average: ([0-9.]+)",
+                r"average = ([0-9.]+)"
+            ]
             
-            # Extract min latency
-            min_match = re.search(r"min-lat=([0-9.]+)", content)
-            if min_match:
-                metrics["min_latency"] = min_match.group(1)
+            for pattern in avg_patterns:
+                avg_match = re.search(pattern, content)
+                if avg_match:
+                    metrics["avg_latency"] = avg_match.group(1)
+                    break
             
-            # Extract max latency
-            max_match = re.search(r"max-lat=([0-9.]+)", content)
-            if max_match:
-                metrics["max_latency"] = max_match.group(1)
+            # Try multiple patterns for min latency
+            min_patterns = [
+                r"min-lat=([0-9.]+)",
+                r"<MIN> observation = ([0-9.]+)",
+                r"Min latency = ([0-9.]+)"
+            ]
             
-            # Extract p50 latency
-            p50_match = re.search(r"median-lat=([0-9.]+)", content)
-            if p50_match:
-                metrics["percentile_50"] = p50_match.group(1)
+            for pattern in min_patterns:
+                min_match = re.search(pattern, content)
+                if min_match:
+                    metrics["min_latency"] = min_match.group(1)
+                    break
             
-            # Extract p99 latency
-            p99_match = re.search(r"percentile 99\.00=([0-9.]+)", content)
-            if p99_match:
-                metrics["percentile_99"] = p99_match.group(1)
+            # Try multiple patterns for max latency
+            max_patterns = [
+                r"max-lat=([0-9.]+)",
+                r"<MAX> observation = ([0-9.]+)",
+                r"Max latency = ([0-9.]+)"
+            ]
             
-            # Extract p99.9 latency
-            p999_match = re.search(r"percentile 99\.90=([0-9.]+)", content)
-            if p999_match:
-                metrics["percentile_999"] = p999_match.group(1)
+            for pattern in max_patterns:
+                max_match = re.search(pattern, content)
+                if max_match:
+                    metrics["max_latency"] = max_match.group(1)
+                    break
+            
+            # Try multiple patterns for p50 latency
+            p50_patterns = [
+                r"median-lat=([0-9.]+)",
+                r"percentile 50\.00.? = ([0-9.]+)",
+                r"percentile 50.? = ([0-9.]+)"
+            ]
+            
+            for pattern in p50_patterns:
+                p50_match = re.search(pattern, content)
+                if p50_match:
+                    metrics["percentile_50"] = p50_match.group(1)
+                    break
+            
+            # Try multiple patterns for p99 latency
+            p99_patterns = [
+                r"percentile 99\.00.? = ([0-9.]+)",
+                r"percentile 99.? = ([0-9.]+)"
+            ]
+            
+            for pattern in p99_patterns:
+                p99_match = re.search(pattern, content)
+                if p99_match:
+                    metrics["percentile_99"] = p99_match.group(1)
+                    break
+            
+            # Try multiple patterns for p99.9 latency
+            p999_patterns = [
+                r"percentile 99\.90.? = ([0-9.]+)",
+                r"percentile 99\.9.? = ([0-9.]+)"
+            ]
+            
+            for pattern in p999_patterns:
+                p999_match = re.search(pattern, content)
+                if p999_match:
+                    metrics["percentile_999"] = p999_match.group(1)
+                    break
+                    
+            # If we still don't have metrics, print some debug info
+            if debug and metrics["avg_latency"] == "N/A":
+                print(f"DEBUG: Could not extract metrics from {latency_file}")
+                print(f"DEBUG: First 100 characters of content: {content[:100]}")
+                print(f"DEBUG: File size: {os.path.getsize(latency_file)} bytes")
     
     # Extract bandwidth metrics
     if os.path.exists(bandwidth_file):
