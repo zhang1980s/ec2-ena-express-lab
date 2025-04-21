@@ -724,6 +724,9 @@ def run_tests(debug: bool = False) -> Dict:
 
 def main():
     """Main function to parse arguments and run tests."""
+    # Declare globals at the beginning of the function
+    global ITERATIONS, REPEAT, TEST_DURATION, PRE_WARM_WAIT, MPS
+    
     parser = argparse.ArgumentParser(description="ENA Express Latency Benchmark")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--iterations", type=int, default=ITERATIONS, help=f"Number of test iterations (default: {ITERATIONS})")
@@ -735,7 +738,6 @@ def main():
     args = parser.parse_args()
     
     # Update global variables with command line arguments
-    global ITERATIONS, REPEAT, TEST_DURATION, PRE_WARM_WAIT, MPS
     ITERATIONS = args.iterations
     REPEAT = args.repeat
     TEST_DURATION = args.duration
