@@ -203,7 +203,10 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 r"median-lat=([0-9.]+)",
                 r"percentile 50\.00.? = ([0-9.]+)",
                 r"percentile 50.? = ([0-9.]+)",
-                r"---> percentile 50\.000 = ([0-9.]+)"
+                r"---> percentile 50\.000 = ([0-9.]+)",
+                r"---> percentile 50\.00 = ([0-9.]+)",
+                r"---> percentile 50\.0 = ([0-9.]+)",
+                r"---> percentile 50 = ([0-9.]+)"
             ]
             
             for pattern in p50_patterns:
@@ -211,12 +214,24 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 if p50_match:
                     metrics["percentile_50"] = p50_match.group(1)
                     break
+                
+            # If we still don't have p50, try to find it in the percentile section
+            if metrics["percentile_50"] == "N/A":
+                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
+                if percentile_section:
+                    section_text = percentile_section.group(0)
+                    p50_match = re.search(r"---> percentile 50[\.0]* = ([0-9.]+)", section_text)
+                    if p50_match:
+                        metrics["percentile_50"] = p50_match.group(1)
             
             # Try multiple patterns for p99 latency
             p99_patterns = [
                 r"percentile 99\.00.? = ([0-9.]+)",
                 r"percentile 99.? = ([0-9.]+)",
-                r"---> percentile 99\.000 = ([0-9.]+)"
+                r"---> percentile 99\.000 = ([0-9.]+)",
+                r"---> percentile 99\.00 = ([0-9.]+)",
+                r"---> percentile 99\.0 = ([0-9.]+)",
+                r"---> percentile 99 = ([0-9.]+)"
             ]
             
             for pattern in p99_patterns:
@@ -224,12 +239,23 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 if p99_match:
                     metrics["percentile_99"] = p99_match.group(1)
                     break
+                
+            # If we still don't have p99, try to find it in the percentile section
+            if metrics["percentile_99"] == "N/A":
+                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
+                if percentile_section:
+                    section_text = percentile_section.group(0)
+                    p99_match = re.search(r"---> percentile 99[\.0]* = ([0-9.]+)", section_text)
+                    if p99_match:
+                        metrics["percentile_99"] = p99_match.group(1)
             
             # Try multiple patterns for p99.9 latency
             p999_patterns = [
                 r"percentile 99\.90.? = ([0-9.]+)",
                 r"percentile 99\.9.? = ([0-9.]+)",
-                r"---> percentile 99\.900 = ([0-9.]+)"
+                r"---> percentile 99\.900 = ([0-9.]+)",
+                r"---> percentile 99\.90 = ([0-9.]+)",
+                r"---> percentile 99\.9 = ([0-9.]+)"
             ]
             
             for pattern in p999_patterns:
@@ -237,6 +263,15 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 if p999_match:
                     metrics["percentile_999"] = p999_match.group(1)
                     break
+                
+            # If we still don't have p99.9, try to find it in the percentile section
+            if metrics["percentile_999"] == "N/A":
+                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
+                if percentile_section:
+                    section_text = percentile_section.group(0)
+                    p999_match = re.search(r"---> percentile 99\.9[0]* = ([0-9.]+)", section_text)
+                    if p999_match:
+                        metrics["percentile_999"] = p999_match.group(1)
                     
             # If we still don't have metrics, print some debug info
             if debug and metrics["avg_latency"] == "N/A":
