@@ -603,15 +603,14 @@ def run_tests(debug: bool = False) -> Dict:
         print(f"│   Source IP: {CLIENT_IP_SRD}{' ' * (table_width - 15 - len(CLIENT_IP_SRD))}│")
         print(f"│   Destination IP: {SERVER_IP_SRD}{' ' * (table_width - 20 - len(SERVER_IP_SRD))}│")
         
-        # Write UDP results section
-        section_lines = format_table_section("UDP Results", table_width)
+        # Write UDP Ping-Pong (Latency) Results section
+        section_lines = format_table_section("UDP Ping-Pong (Latency) Results", table_width)
         for line in section_lines:
             f.write(f"{line}\n")
             print(line)
         
-        # Format UDP results with colors based on improvement
+        # Format UDP latency results with colors based on improvement
         # For latency metrics, negative improvement (red) is bad, positive (green) is good
-        # For bandwidth metrics, negative improvement (red) is bad, positive (green) is good
         
         # Average Latency
         f.write(f"│ Average Latency:{' ' * (table_width - 18)}│\n")
@@ -696,7 +695,6 @@ def run_tests(debug: bool = False) -> Dict:
             improvement_color = Colors.RED
         
         f.write(f"│   Improvement: {improvement_color}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_max_improvement_display))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
         
         print(f"│ Maximum Latency:{' ' * (table_width - 18)}│")
         print(f"│   Regular ENI: {udp_eni_max:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_max:.3f}'))}│")
@@ -707,7 +705,14 @@ def run_tests(debug: bool = False) -> Dict:
         else:
             print(f"│   Improvement: {Colors.RED}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_max_improvement_display))}│")
         
-        print(f"│{' ' * (table_width - 2)}│")
+        # Write UDP Throughput (Bandwidth) Results section
+        section_lines = format_table_section("UDP Throughput (Bandwidth) Results", table_width)
+        for line in section_lines:
+            f.write(f"{line}\n")
+            print(line)
+        
+        # Format UDP bandwidth results with colors based on improvement
+        # For bandwidth metrics, negative improvement (red) is bad, positive (green) is good
         
         # Bandwidth
         f.write(f"│ Bandwidth:{' ' * (table_width - 12)}│\n")
@@ -720,6 +725,7 @@ def run_tests(debug: bool = False) -> Dict:
             improvement_color = Colors.RED
         
         f.write(f"│   Improvement: {improvement_color}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│\n")
+        f.write(f"│{' ' * (table_width - 2)}│\n")
         
         print(f"│ Bandwidth:{' ' * (table_width - 12)}│")
         print(f"│   Regular ENI: {udp_eni_bw:.3f} Gbps{' ' * (table_width - 24 - len(f'{udp_eni_bw:.3f}'))}│")
@@ -729,6 +735,40 @@ def run_tests(debug: bool = False) -> Dict:
             print(f"│   Improvement: {Colors.GREEN}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│")
         else:
             print(f"│   Improvement: {Colors.RED}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│")
+        
+        # Message Rate
+        f.write(f"│ Message Rate:{' ' * (table_width - 15)}│\n")
+        f.write(f"│   Regular ENI: {eni_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(eni_metrics['message_rate']))}│\n")
+        f.write(f"│   ENA Express: {srd_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(srd_metrics['message_rate']))}│\n")
+        
+        # Calculate message rate improvement
+        if eni_metrics['message_rate'] != "N/A" and srd_metrics['message_rate'] != "N/A":
+            try:
+                eni_mr = float(eni_metrics['message_rate'])
+                srd_mr = float(srd_metrics['message_rate'])
+                if eni_mr > 0:
+                    mr_improvement = ((srd_mr - eni_mr) / eni_mr) * 100
+                    mr_improvement_display = f"{mr_improvement:.2f}%"
+                    if mr_improvement >= 0:
+                        mr_improvement_color = Colors.GREEN
+                    else:
+                        mr_improvement_color = Colors.RED
+                else:
+                    mr_improvement_display = "N/A"
+                    mr_improvement_color = Colors.ENDC
+            except (ValueError, ZeroDivisionError):
+                mr_improvement_display = "N/A"
+                mr_improvement_color = Colors.ENDC
+        else:
+            mr_improvement_display = "N/A"
+            mr_improvement_color = Colors.ENDC
+        
+        f.write(f"│   Improvement: {mr_improvement_color}{mr_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(mr_improvement_display))}│\n")
+        
+        print(f"│ Message Rate:{' ' * (table_width - 15)}│")
+        print(f"│   Regular ENI: {eni_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(eni_metrics['message_rate']))}│")
+        print(f"│   ENA Express: {srd_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(srd_metrics['message_rate']))}│")
+        print(f"│   Improvement: {mr_improvement_color}{mr_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(mr_improvement_display))}│")
         
         # Write footer
         footer = format_table_section(f"Results saved in: {output_dir}", table_width)
