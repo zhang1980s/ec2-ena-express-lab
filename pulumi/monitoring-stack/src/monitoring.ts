@@ -7,7 +7,7 @@ export interface MonitoringArgs {
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<string>[];
     grafanaPassword: string;
-    testInstanceIps?: string[];
+    testInstanceIps?: pulumi.Input<string[]>;
 }
 
 export class Monitoring extends pulumi.ComponentResource {
@@ -107,7 +107,11 @@ export class Monitoring extends pulumi.ComponentResource {
         }, { parent: this });
 
         // Create Prometheus configuration
-        const prometheusConfig = pulumi.interpolate`
+        const prometheusConfig = pulumi.all([args.testInstanceIps || ["instance-1", "instance-2"]]).apply(([ips]) => {
+            const sockperfTargets = ips.map(ip => `${ip}:9091`);
+            const nodeTargets = ips.map(ip => `${ip}:9100`);
+            
+            return `
 global:
   scrape_interval: 1s
   evaluation_interval: 1s
@@ -115,14 +119,14 @@ global:
 scrape_configs:
   - job_name: 'sockperf'
     static_configs:
-      - targets: ${args.testInstanceIps ? args.testInstanceIps.map(ip => `${ip}:9091`) : ["instance-1:9091", "instance-2:9091"]}
+      - targets: ${JSON.stringify(sockperfTargets)}
         labels:
           group: 'sockperf'
           environment: 'test'
     
   - job_name: 'node'
     static_configs:
-      - targets: ${args.testInstanceIps ? args.testInstanceIps.map(ip => `${ip}:9100`) : ["instance-1:9100", "instance-2:9100"]}
+      - targets: ${JSON.stringify(nodeTargets)}
         labels:
           group: 'nodes'
           environment: 'test'
@@ -133,6 +137,7 @@ scrape_configs:
         labels:
           group: 'monitoring'
 `;
+        });
 
         // Create task definitions
         const prometheusTaskDef = new aws.ecs.TaskDefinition(`${name}-prometheus-task`, {

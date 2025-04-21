@@ -45,6 +45,13 @@ export const instancePublicIps = pulumi.output(compute.instances).apply(instance
     });
     return result;
 });
+export const instanceElasticIps = pulumi.output(compute.elasticIps).apply(eips => {
+    const result: Record<string, pulumi.Output<string>> = {};
+    eips.forEach((eip, i) => {
+        result[instanceNames[i]] = eip.publicIp;
+    });
+    return result;
+});
 export const primaryEniIds = pulumi.output(compute.primaryEnis).apply(enis => 
     enis.map((eni, i) => ({ [`${instanceNames[i]}-primary`]: eni.id }))
 );

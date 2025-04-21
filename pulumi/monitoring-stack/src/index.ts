@@ -10,20 +10,20 @@ const subnetIds = networkStack.getOutput("subnetIds");
 
 // Get references to the compute stack outputs
 const computeStack = new pulumi.StackReference(`${pulumi.getOrganization()}/ec2-ena-express-compute/${monitoringConfig.computeStackName}`);
-const instancePublicIps = computeStack.getOutput("instancePublicIps");
+const instanceElasticIps = computeStack.getOutput("instanceElasticIps");
 
-// Create monitoring resources with default values for testInstanceIps
+// Create monitoring resources with Elastic IPs for testInstanceIps
 const monitoring = new Monitoring("monitoring", {
     stackName: monitoringConfig.stackName,
     vpcId: vpcId,
     subnetIds: [subnetIds.apply(ids => ids[0])], // Use the first subnet
     grafanaPassword: monitoringConfig.grafanaPassword,
-    // We'll use the default values in the Monitoring class
+    testInstanceIps: instanceElasticIps.apply(ips => [ips["sockperf-server"], ips["sockperf-client"]]),
 });
 
 // Log the instance IPs for reference
-instancePublicIps.apply(ips => {
-    console.log("Instance Public IPs for monitoring:", JSON.stringify(ips));
+instanceElasticIps.apply(ips => {
+    console.log("Instance Elastic IPs for monitoring:", JSON.stringify(ips));
     return ips;
 });
 
