@@ -188,7 +188,8 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
             max_patterns = [
                 r"max-lat=([0-9.]+)",
                 r"<MAX> observation = ([0-9.]+)",
-                r"Max latency = ([0-9.]+)"
+                r"Max latency = ([0-9.]+)",
+                r"---> <MAX> observation = ([0-9.]+)"
             ]
             
             for pattern in max_patterns:
@@ -201,7 +202,8 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
             p50_patterns = [
                 r"median-lat=([0-9.]+)",
                 r"percentile 50\.00.? = ([0-9.]+)",
-                r"percentile 50.? = ([0-9.]+)"
+                r"percentile 50.? = ([0-9.]+)",
+                r"---> percentile 50\.000 = ([0-9.]+)"
             ]
             
             for pattern in p50_patterns:
@@ -213,7 +215,8 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
             # Try multiple patterns for p99 latency
             p99_patterns = [
                 r"percentile 99\.00.? = ([0-9.]+)",
-                r"percentile 99.? = ([0-9.]+)"
+                r"percentile 99.? = ([0-9.]+)",
+                r"---> percentile 99\.000 = ([0-9.]+)"
             ]
             
             for pattern in p99_patterns:
@@ -225,7 +228,8 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
             # Try multiple patterns for p99.9 latency
             p999_patterns = [
                 r"percentile 99\.90.? = ([0-9.]+)",
-                r"percentile 99\.9.? = ([0-9.]+)"
+                r"percentile 99\.9.? = ([0-9.]+)",
+                r"---> percentile 99\.900 = ([0-9.]+)"
             ]
             
             for pattern in p999_patterns:
@@ -253,10 +257,17 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 metrics["message_rate"] = msg_rate_match.group(1)
             
             # Extract bandwidth
-            bw_match = re.search(r"Throughput: ([0-9.]+)", content)
-            if bw_match:
-                bandwidth_mbps = float(bw_match.group(1))
-                metrics["bandwidth_gbps"] = f"{bandwidth_mbps / 1000:.3f}"
+            bw_patterns = [
+                r"Throughput: ([0-9.]+)",
+                r"BandWidth is [0-9.]+ MBps \(([0-9.]+) Mbps\)"
+            ]
+            
+            for pattern in bw_patterns:
+                bw_match = re.search(pattern, content)
+                if bw_match:
+                    bandwidth_mbps = float(bw_match.group(1))
+                    metrics["bandwidth_gbps"] = f"{bandwidth_mbps / 1000:.3f}"
+                    break
     
     return metrics
 
