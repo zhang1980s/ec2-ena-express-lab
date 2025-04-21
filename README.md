@@ -83,6 +83,25 @@ Our infrastructure is deployed using Pulumi with TypeScript, consisting of:
 ### Access Management
 - IAM role with Systems Manager access for remote management
 
+## Running the Tests
+
+### Run the sockperf server on sockperf-server
+
+#### On first terminal
+```bash
+sockperf server -i 192.168.3.10 -p 11110
+```
+
+#### On second terminal
+```bash
+sockperf server -i 192.168.3.11 -p 11111
+```
+
+### Run the ena_express_latency_benchmark.sh on sockperf-client
+```bash
+./ena_express_latency_benchmark.sh [--debug]
+```
+
 ### Pulumi Implementation
 
 The project uses Pulumi with TypeScript, which offers several advantages:

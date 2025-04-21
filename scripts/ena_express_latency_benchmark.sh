@@ -32,7 +32,7 @@ BASE_PORT=10000
 ITERATIONS=1
 REPEAT=1  # Number of times to repeat each test
 TEST_DURATION=600  # Test duration in seconds
-PRE_WARM_WAIT=60  # Pre-warmup wait time in seconds
+PRE_WARM_WAIT=30  # Pre-warmup wait time in seconds
 MPS=max #Set number of messages-per-second (default = 10000 - for under-load mode, or max - for ping-pong and throughput modes; for maximum use --mps=max; origin script: mps=100
 
 # Create output directories and files
@@ -48,9 +48,9 @@ SRD_SUMMARY="${OUTPUT_DIR}/srd_summary.csv"
 COMPARISON="${OUTPUT_DIR}/comparison.csv"
 
 # Create headers for summary files
-echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th" > "${ENI_SUMMARY}"
-echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th" > "${SRD_SUMMARY}"
-echo "Iteration,Repeat,Timestamp,ENI_5Tuple,SRD_5Tuple,ENI_Avg,SRD_Avg,ENI_p50,SRD_p50,ENI_p99,SRD_p99,Improvement_Avg_Percent,Improvement_p50_Percent,Improvement_p99_Percent" > "${COMPARISON}"
+echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th,Bandwidth_Gbps,Message_Rate" > "${ENI_SUMMARY}"
+echo "Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th,Bandwidth_Gbps,Message_Rate" > "${SRD_SUMMARY}"
+echo "Iteration,Repeat,Timestamp,Protocol,ENI_5Tuple,SRD_5Tuple,ENI_Avg,SRD_Avg,ENI_p50,SRD_p50,ENI_p99,SRD_p99,ENI_Max,SRD_Max,Improvement_Avg_Percent,Improvement_p50_Percent,Improvement_p99_Percent,Improvement_Max_Percent,ENI_BW,SRD_BW,BW_Improvement_Percent" > "${COMPARISON}"
 
 # Function to check if sockperf server is running
 check_sockperf_server() {
@@ -95,116 +95,183 @@ run_sockperf() {
     local remote_port=$2
     local local_ip=$3
     local local_port=$4
-    local output_file=$5
+    local output_file_base=$5
     local type=$6
     local iteration=$7
     local repeat=$8
     
     local five_tuple="${local_ip}:${local_port}->${remote_ip}:${remote_port}/UDP"
+    local latency_output_file="${output_file_base}_latency.log"
+    local bandwidth_output_file="${output_file_base}_bandwidth.log"
     
-    echo "Running ${type} UDP test (Iteration ${iteration}, Repeat ${repeat}): ${five_tuple}" >&2
+    echo "Running ${type} UDP tests (Iteration ${iteration}, Repeat ${repeat}): ${five_tuple}" >&2
     
-    # Run sockperf UDP test
+    # Run sockperf UDP latency test (ping-pong)
+    echo "  - Running latency test..." >&2
     sockperf ping-pong -i "${remote_ip}" -p "${remote_port}" \
         --client_ip "${local_ip}" --client_port "${local_port}" \
         --time ${TEST_DURATION} --msg-size 64 --mps ${MPS} \
-        --pre-warmup-wait ${PRE_WARM_WAIT} > "${output_file}" 2>&1
+        --pre-warmup-wait ${PRE_WARM_WAIT} > "${latency_output_file}" 2>&1
     
-    # Check if the command succeeded
-    if [ $? -ne 0 ]; then
-        echo "ERROR: UDP sockperf command failed for ${type} test." >&2
+    local latency_status=$?
+    
+    # Run sockperf UDP bandwidth test (throughput)
+    echo "  - Running bandwidth test..." >&2
+    sockperf throughput -i "${remote_ip}" -p "${remote_port}" \
+        --client_ip "${local_ip}" --client_port "$((local_port+1))" \
+        --time ${TEST_DURATION} --msg-size 1472 \
+        --pre-warmup-wait ${PRE_WARM_WAIT} > "${bandwidth_output_file}" 2>&1
+    
+    local bandwidth_status=$?
+    
+    # Check if the commands succeeded
+    if [ $latency_status -ne 0 ]; then
+        echo "ERROR: UDP sockperf latency command failed for ${type} test." >&2
         echo "Command output:" >&2
-        cat "${output_file}" >&2
+        cat "${latency_output_file}" >&2
         return 1
     fi
     
-    # Extract key metrics
-    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local min_latency=$(grep -oP "min-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local max_latency=$(grep -oP "max-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local percentile_50=$(grep -oP "median-lat=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local percentile_99=$(grep -oP "percentile 99.00=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local percentile_999=$(grep -oP "percentile 99.90=\K[0-9.]+" "${output_file}" || echo "N/A")
-    local mps=$(grep -oP "Rate=\K[0-9.]+" "${output_file}" || echo "N/A")
+    if [ $bandwidth_status -ne 0 ]; then
+        echo "ERROR: UDP sockperf bandwidth command failed for ${type} test." >&2
+        echo "Command output:" >&2
+        cat "${bandwidth_output_file}" >&2
+        return 1
+    fi
     
-    # Add 5-tuple information to the beginning of the output file
-    sed -i "1i\# 5-Tuple: ${five_tuple}" "${output_file}"
-    sed -i "2i\# Test type: ${type}" "${output_file}"
-    sed -i "3i\# Iteration: ${iteration}, Repeat: ${repeat}" "${output_file}"
-    sed -i "4i\# Timestamp: ${timestamp}" "${output_file}"
-    sed -i "5i\#----------------------------------------------------" "${output_file}"
+    # Extract latency metrics
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local min_latency=$(grep -oP "min-lat=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local max_latency=$(grep -oP "max-lat=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local percentile_50=$(grep -oP "median-lat=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local percentile_99=$(grep -oP "percentile 99.00=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local percentile_999=$(grep -oP "percentile 99.90=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    local latency_mps=$(grep -oP "Rate=\K[0-9.]+" "${latency_output_file}" || echo "N/A")
+    
+    # Extract bandwidth metrics
+    local message_rate=$(grep -oP "Message Rate is \K[0-9.]+" "${bandwidth_output_file}" || echo "N/A")
+    local bandwidth_mbps=$(grep -oP "Throughput: \K[0-9.]+" "${bandwidth_output_file}" || echo "N/A")
+    local bandwidth_gbps="N/A"
+    
+    if [[ "$bandwidth_mbps" != "N/A" && -n "$bandwidth_mbps" ]]; then
+        # Convert Mbps to Gbps
+        bandwidth_gbps=$(awk -v mbps="$bandwidth_mbps" 'BEGIN {printf "%.3f", mbps/1000}')
+    fi
+    
+    # Add information to the beginning of the output files
+    for file in "${latency_output_file}" "${bandwidth_output_file}"; do
+        sed -i "1i\# 5-Tuple: ${five_tuple}" "${file}"
+        sed -i "2i\# Test type: ${type}" "${file}"
+        sed -i "3i\# Iteration: ${iteration}, Repeat: ${repeat}" "${file}"
+        sed -i "4i\# Timestamp: ${timestamp}" "${file}"
+        sed -i "5i\#----------------------------------------------------" "${file}"
+    done
     
     # Log summary
     if [[ "${type}" == "ENI" ]]; then
-        echo "${iteration},${repeat},${timestamp},${local_ip},${local_port},${remote_ip},${remote_port},UDP,${mps},${avg_latency},${min_latency},${max_latency},${percentile_50},${percentile_99},${percentile_999}" >> "${ENI_SUMMARY}"
+        echo "${iteration},${repeat},${timestamp},${local_ip},${local_port},${remote_ip},${remote_port},UDP,${latency_mps},${avg_latency},${min_latency},${max_latency},${percentile_50},${percentile_99},${percentile_999},${bandwidth_gbps},${message_rate}" >> "${ENI_SUMMARY}"
     else
-        echo "${iteration},${repeat},${timestamp},${local_ip},${local_port},${remote_ip},${remote_port},UDP,${mps},${avg_latency},${min_latency},${max_latency},${percentile_50},${percentile_99},${percentile_999}" >> "${SRD_SUMMARY}"
+        echo "${iteration},${repeat},${timestamp},${local_ip},${local_port},${remote_ip},${remote_port},UDP,${latency_mps},${avg_latency},${min_latency},${max_latency},${percentile_50},${percentile_99},${percentile_999},${bandwidth_gbps},${message_rate}" >> "${SRD_SUMMARY}"
     fi
     
     # Return key metrics for comparison (separate from 5-tuple)
-    echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99};${max_latency}"
+    echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99};${max_latency};${bandwidth_gbps};${message_rate}"
 }
 
 # Function to extract metrics from sockperf output file
 extract_metrics() {
-    local output_file=$1
-    local five_tuple=$2
+    local latency_output_file=$1
+    local bandwidth_output_file=$2
+    local five_tuple=$3
     
-    debug_echo "Extracting metrics from ${output_file} for ${five_tuple}"
+    debug_echo "Extracting metrics from ${latency_output_file} and ${bandwidth_output_file} for ${five_tuple}"
     
-    # Check if file exists and has content
-    if [ ! -f "${output_file}" ]; then
-        debug_echo "File ${output_file} does not exist"
-        echo "${five_tuple};N/A;N/A;N/A;N/A"
+    # Check if latency file exists and has content
+    if [ ! -f "${latency_output_file}" ]; then
+        debug_echo "File ${latency_output_file} does not exist"
+        echo "${five_tuple};N/A;N/A;N/A;N/A;N/A;N/A"
         return
     fi
     
-    # Check file size
-    local file_size=$(wc -c < "${output_file}")
-    debug_echo "File size: ${file_size} bytes"
+    # Check latency file size
+    local latency_file_size=$(wc -c < "${latency_output_file}")
+    debug_echo "Latency file size: ${latency_file_size} bytes"
     
-    # Show file content for debugging
+    # Show latency file content for debugging
     if [ "$DEBUG" = true ]; then
-        debug_echo "File content (first 20 lines):"
-        head -n 20 "${output_file}" | while IFS= read -r line; do
+        debug_echo "Latency file content (first 20 lines):"
+        head -n 20 "${latency_output_file}" | while IFS= read -r line; do
             debug_echo "  $line"
         done
     fi
     
     # Try many different patterns to extract the average latency
-    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${output_file}" 2>/dev/null || 
-                        grep -oP "Summary: Latency is \K[0-9.]+" "${output_file}" 2>/dev/null ||
-                        grep -oP "Average latency.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
-                        grep -oP "avg.*latency.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
-                        grep -oP "average.*: \K[0-9.]+" "${output_file}" 2>/dev/null ||
-                        grep -oP "latency average: \K[0-9.]+" "${output_file}" 2>/dev/null ||
-                        grep -oP "average = \K[0-9.]+" "${output_file}" 2>/dev/null ||
+    local avg_latency=$(grep -oP "avg-lat=\K[0-9.]+" "${latency_output_file}" 2>/dev/null || 
+                        grep -oP "Summary: Latency is \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
+                        grep -oP "Average latency.*: \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
+                        grep -oP "avg.*latency.*: \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
+                        grep -oP "average.*: \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
+                        grep -oP "latency average: \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
+                        grep -oP "average = \K[0-9.]+" "${latency_output_file}" 2>/dev/null ||
                         echo "N/A")
     debug_echo "avg_latency = ${avg_latency}"
     
     # Extract the p50 value using awk to handle the variable spacing
-    local percentile_50=$(awk '/sockperf: ---> percentile 50.000 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 50.00 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 50.0 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 50 =/ {print $6}' "${output_file}" 2>/dev/null ||
+    local percentile_50=$(awk '/sockperf: ---> percentile 50.000 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 50.00 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 50.0 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 50 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
                           echo "N/A")
     debug_echo "percentile_50 = ${percentile_50}"
     
     # Extract the p99 value using awk to handle the variable spacing
-    local percentile_99=$(awk '/sockperf: ---> percentile 99.000 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 99.00 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 99.0 =/ {print $6}' "${output_file}" 2>/dev/null ||
-                          awk '/sockperf: ---> percentile 99 =/ {print $6}' "${output_file}" 2>/dev/null ||
+    local percentile_99=$(awk '/sockperf: ---> percentile 99.000 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 99.00 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 99.0 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
+                          awk '/sockperf: ---> percentile 99 =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
                           echo "N/A")
     debug_echo "percentile_99 = ${percentile_99}"
     
     # Extract the max latency value
-    local max_latency=$(awk '/sockperf: ---> <MAX> observation =/ {print $6}' "${output_file}" 2>/dev/null ||
+    local max_latency=$(awk '/sockperf: ---> <MAX> observation =/ {print $6}' "${latency_output_file}" 2>/dev/null ||
                         echo "N/A")
     debug_echo "max_latency = ${max_latency}"
     
-    echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99};${max_latency}"
+    # Extract bandwidth metrics
+    local bandwidth_mbps="N/A"
+    local message_rate="N/A"
+    local bandwidth_gbps="N/A"
+    
+    if [ -f "${bandwidth_output_file}" ]; then
+        # Check bandwidth file size
+        local bandwidth_file_size=$(wc -c < "${bandwidth_output_file}")
+        debug_echo "Bandwidth file size: ${bandwidth_file_size} bytes"
+        
+        # Show bandwidth file content for debugging
+        if [ "$DEBUG" = true ]; then
+            debug_echo "Bandwidth file content (first 20 lines):"
+            head -n 20 "${bandwidth_output_file}" | while IFS= read -r line; do
+                debug_echo "  $line"
+            done
+        fi
+        
+        message_rate=$(grep -oP "Message Rate is \K[0-9.]+" "${bandwidth_output_file}" 2>/dev/null || echo "N/A")
+        bandwidth_mbps=$(grep -oP "Throughput: \K[0-9.]+" "${bandwidth_output_file}" 2>/dev/null || echo "N/A")
+        
+        if [[ "$bandwidth_mbps" != "N/A" && -n "$bandwidth_mbps" ]]; then
+            # Convert Mbps to Gbps
+            bandwidth_gbps=$(awk -v mbps="$bandwidth_mbps" 'BEGIN {printf "%.3f", mbps/1000}')
+        fi
+        
+        debug_echo "message_rate = ${message_rate}"
+        debug_echo "bandwidth_mbps = ${bandwidth_mbps}"
+        debug_echo "bandwidth_gbps = ${bandwidth_gbps}"
+    else
+        debug_echo "Bandwidth file ${bandwidth_output_file} does not exist"
+    fi
+    
+    echo "${five_tuple};${avg_latency};${percentile_50};${percentile_99};${max_latency};${bandwidth_gbps};${message_rate}"
 }
 
 # Check if sockperf servers are running
@@ -248,8 +315,13 @@ for ((i = 0; i < ITERATIONS; i++)); do
         ENI_UDP_5TUPLE="${LOCAL_IP_ENI}:${PORT_ENI_BASE}->${REMOTE_IP_ENI}:${REMOTE_PORT_ENI}/UDP"
         SRD_UDP_5TUPLE="${LOCAL_IP_SRD}:${PORT_SRD_BASE}->${REMOTE_IP_SRD}:${REMOTE_PORT_SRD}/UDP"
         
-        ENI_UDP_METRICS=$(extract_metrics "${ENI_UDP_OUTPUT}" "${ENI_UDP_5TUPLE}")
-        SRD_UDP_METRICS=$(extract_metrics "${SRD_UDP_OUTPUT}" "${SRD_UDP_5TUPLE}")
+        ENI_UDP_LATENCY_OUTPUT="${ENI_UDP_OUTPUT}_latency.log"
+        ENI_UDP_BANDWIDTH_OUTPUT="${ENI_UDP_OUTPUT}_bandwidth.log"
+        SRD_UDP_LATENCY_OUTPUT="${SRD_UDP_OUTPUT}_latency.log"
+        SRD_UDP_BANDWIDTH_OUTPUT="${SRD_UDP_OUTPUT}_bandwidth.log"
+        
+        ENI_UDP_METRICS=$(extract_metrics "${ENI_UDP_LATENCY_OUTPUT}" "${ENI_UDP_BANDWIDTH_OUTPUT}" "${ENI_UDP_5TUPLE}")
+        SRD_UDP_METRICS=$(extract_metrics "${SRD_UDP_LATENCY_OUTPUT}" "${SRD_UDP_BANDWIDTH_OUTPUT}" "${SRD_UDP_5TUPLE}")
         
         # Parse UDP metrics - using semicolon as separator to avoid issues with commas in the 5-tuple
         ENI_UDP_5TUPLE=$(echo "$ENI_UDP_METRICS" | cut -d';' -f1)
@@ -257,12 +329,16 @@ for ((i = 0; i < ITERATIONS; i++)); do
         ENI_UDP_P50=$(echo "$ENI_UDP_METRICS" | cut -d';' -f3)
         ENI_UDP_P99=$(echo "$ENI_UDP_METRICS" | cut -d';' -f4)
         ENI_UDP_MAX=$(echo "$ENI_UDP_METRICS" | cut -d';' -f5)
+        ENI_UDP_BW=$(echo "$ENI_UDP_METRICS" | cut -d';' -f6)
+        ENI_UDP_MR=$(echo "$ENI_UDP_METRICS" | cut -d';' -f7)
         
         SRD_UDP_5TUPLE=$(echo "$SRD_UDP_METRICS" | cut -d';' -f1)
         SRD_UDP_AVG=$(echo "$SRD_UDP_METRICS" | cut -d';' -f2)
         SRD_UDP_P50=$(echo "$SRD_UDP_METRICS" | cut -d';' -f3)
         SRD_UDP_P99=$(echo "$SRD_UDP_METRICS" | cut -d';' -f4)
         SRD_UDP_MAX=$(echo "$SRD_UDP_METRICS" | cut -d';' -f5)
+        SRD_UDP_BW=$(echo "$SRD_UDP_METRICS" | cut -d';' -f6)
+        SRD_UDP_MR=$(echo "$SRD_UDP_METRICS" | cut -d';' -f7)
         
         # Calculate UDP improvement percentages - only using numeric values
         if [[ "$ENI_UDP_AVG" != "N/A" && "$SRD_UDP_AVG" != "N/A" && -n "$ENI_UDP_AVG" && -n "$SRD_UDP_AVG" ]]; then
@@ -293,9 +369,17 @@ for ((i = 0; i < ITERATIONS; i++)); do
             UDP_MAX_IMPROVEMENT="N/A"
         fi
         
+        # Calculate bandwidth improvement percentage
+        if [[ "$ENI_UDP_BW" != "N/A" && "$SRD_UDP_BW" != "N/A" && -n "$ENI_UDP_BW" && -n "$SRD_UDP_BW" ]]; then
+            # Use awk for calculation to avoid dependency on bc
+            UDP_BW_IMPROVEMENT=$(awk -v eni="$ENI_UDP_BW" -v srd="$SRD_UDP_BW" 'BEGIN {if(eni > 0) printf "%.2f", ((srd-eni)/eni)*100; else print "N/A"}')
+        else
+            UDP_BW_IMPROVEMENT="N/A"
+        fi
+        
         # Log comparison
         TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
-        echo "${i},${j},${TIMESTAMP},UDP,\"${ENI_UDP_5TUPLE}\",\"${SRD_UDP_5TUPLE}\",${ENI_UDP_AVG},${SRD_UDP_AVG},${ENI_UDP_P50},${SRD_UDP_P50},${ENI_UDP_P99},${SRD_UDP_P99},${ENI_UDP_MAX},${SRD_UDP_MAX},${UDP_AVG_IMPROVEMENT},${UDP_P50_IMPROVEMENT},${UDP_P99_IMPROVEMENT},${UDP_MAX_IMPROVEMENT}" >> "${COMPARISON}"
+        echo "${i},${j},${TIMESTAMP},UDP,\"${ENI_UDP_5TUPLE}\",\"${SRD_UDP_5TUPLE}\",${ENI_UDP_AVG},${SRD_UDP_AVG},${ENI_UDP_P50},${SRD_UDP_P50},${ENI_UDP_P99},${SRD_UDP_P99},${ENI_UDP_MAX},${SRD_UDP_MAX},${UDP_AVG_IMPROVEMENT},${UDP_P50_IMPROVEMENT},${UDP_P99_IMPROVEMENT},${UDP_MAX_IMPROVEMENT},${ENI_UDP_BW},${SRD_UDP_BW},${UDP_BW_IMPROVEMENT}" >> "${COMPARISON}"
         
         # Format UDP improvement percentages with proper handling for N/A values
         if [[ "$UDP_AVG_IMPROVEMENT" == "N/A" ]]; then
@@ -366,6 +450,9 @@ UDP_ENI_P99=$(awk -F, '$4=="UDP" {sum+=$11; count++} END {if(count>0) print sum/
 UDP_SRD_P99=$(awk -F, '$4=="UDP" {sum+=$12; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
 UDP_ENI_MAX=$(awk -F, '$4=="UDP" {sum+=$13; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
 UDP_SRD_MAX=$(awk -F, '$4=="UDP" {sum+=$14; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
+UDP_ENI_BW=$(awk -F, '$4=="UDP" {sum+=$19; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
+UDP_SRD_BW=$(awk -F, '$4=="UDP" {sum+=$20; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
+UDP_BW_IMPROVEMENT=$(awk -F, '$4=="UDP" {sum+=$21; count++} END {if(count>0) print sum/count; else print "N/A"}' "${COMPARISON}")
 
 # Calculate improvement percentages using awk for safer calculations
 if [[ "$UDP_ENI_AVG" != "N/A" && "$UDP_SRD_AVG" != "N/A" ]]; then
@@ -421,6 +508,13 @@ else
     UDP_MAX_IMPROVEMENT_DISPLAY="${UDP_MAX_IMPROVEMENT}%"
 fi
 
+# Format bandwidth improvement percentage for summary report
+if [[ "$UDP_BW_IMPROVEMENT" == "N/A" ]]; then
+    UDP_BW_IMPROVEMENT_DISPLAY="N/A"
+else
+    UDP_BW_IMPROVEMENT_DISPLAY="${UDP_BW_IMPROVEMENT}%"
+fi
+
 # Create summary report
 SUMMARY_REPORT="${OUTPUT_DIR}/summary_report.txt"
 {
@@ -465,6 +559,11 @@ SUMMARY_REPORT="${OUTPUT_DIR}/summary_report.txt"
     echo "  Regular ENI: ${UDP_ENI_MAX} μs"
     echo "  ENA Express: ${UDP_SRD_MAX} μs"
     echo "  Improvement: ${UDP_MAX_IMPROVEMENT_DISPLAY}"
+    echo ""
+    echo "Bandwidth:"
+    echo "  Regular ENI: ${UDP_ENI_BW} Gbps"
+    echo "  ENA Express: ${UDP_SRD_BW} Gbps"
+    echo "  Improvement: ${UDP_BW_IMPROVEMENT_DISPLAY}"
     echo "========================================================"
     echo "Results saved in: ${OUTPUT_DIR}"
     echo "========================================================"
