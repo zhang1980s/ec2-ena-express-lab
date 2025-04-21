@@ -20,8 +20,6 @@ CLIENT_IP_ENI = "192.168.3.20"
 CLIENT_IP_SRD = "192.168.3.21"
 CLIENT_PINGPONG_PORT_ENI = 10000
 CLIENT_PINGPONG_PORT_SRD = 10001
-CLIENT_BANDWIDTH_PORT_ENI = 10010
-CLIENT_BANDWIDTH_PORT_SRD = 10011
 
 # Test parameters
 ITERATIONS = 1
@@ -83,24 +81,17 @@ def check_sockperf_server(remote_ip: str, remote_port: int, test_type: str, debu
         print(f"Error checking sockperf server: {e}")
         return False
 
-def run_sockperf_test(test_type: str, test_mode: str, remote_ip: str, remote_port: int, 
+def run_sockperf_test(test_type: str, remote_ip: str, remote_port: int, 
                      local_ip: str, local_port: int, output_file: str, iteration: int, 
                      repeat: int, debug: bool = False) -> bool:
-    """Run a sockperf test with the specified parameters."""
+    """Run a sockperf latency test with the specified parameters."""
     five_tuple = f"{local_ip}:{local_port}->{remote_ip}:{remote_port}/UDP"
     
-    if test_mode == "latency":
-        print(f"  - Running {test_type} latency test...")
-        cmd = (f"sockperf ping-pong -i {remote_ip} -p {remote_port} "
-               f"--client_ip {local_ip} --client_port {local_port} "
-               f"--time {TEST_DURATION} --msg-size 64 --mps {MPS} "
-               f"--pre-warmup-wait {PRE_WARM_WAIT}")
-    else:  # bandwidth
-        print(f"  - Running {test_type} bandwidth test...")
-        cmd = (f"sockperf throughput -i {remote_ip} -p {remote_port} "
-               f"--client_ip {local_ip} --client_port {local_port} "
-               f"--time {TEST_DURATION} --msg-size 1472 "
-               f"--pre-warmup-wait {PRE_WARM_WAIT}")
+    print(f"  - Running {test_type} latency test...")
+    cmd = (f"sockperf ping-pong -i {remote_ip} -p {remote_port} "
+           f"--client_ip {local_ip} --client_port {local_port} "
+           f"--time {TEST_DURATION} --msg-size 64 --mps {MPS} "
+           f"--pre-warmup-wait {PRE_WARM_WAIT}")
     
     debug_print(f"Running command: {cmd}", debug)
     
@@ -108,7 +99,7 @@ def run_sockperf_test(test_type: str, test_mode: str, remote_ip: str, remote_por
         result = subprocess.run(cmd, shell=True, stdout=open(output_file, 'w'), stderr=subprocess.STDOUT)
         
         if result.returncode != 0:
-            print(f"ERROR: UDP sockperf {test_mode} command failed for {test_type} test.")
+            print(f"ERROR: UDP sockperf latency command failed for {test_type} test.")
             print("Command output:")
             with open(output_file, 'r') as f:
                 print(f.read())
@@ -122,7 +113,7 @@ def run_sockperf_test(test_type: str, test_mode: str, remote_ip: str, remote_por
         with open(output_file, 'w') as f:
             f.write(f"# 5-Tuple: {five_tuple}\n")
             f.write(f"# Test type: {test_type}\n")
-            f.write(f"# Test mode: {test_mode}\n")
+            f.write(f"# Test mode: latency\n")
             f.write(f"# Iteration: {iteration}, Repeat: {repeat}\n")
             f.write(f"# Timestamp: {timestamp}\n")
             f.write("#----------------------------------------------------\n")
@@ -133,8 +124,8 @@ def run_sockperf_test(test_type: str, test_mode: str, remote_ip: str, remote_por
         print(f"Error running sockperf test: {e}")
         return False
 
-def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, debug: bool = False) -> Dict[str, str]:
-    """Extract metrics from sockperf output files."""
+def extract_metrics(latency_file: str, five_tuple: str, debug: bool = False) -> Dict[str, str]:
+    """Extract metrics from sockperf latency output file."""
     metrics = {
         "five_tuple": five_tuple,
         "avg_latency": "N/A",
@@ -142,9 +133,7 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
         "max_latency": "N/A",
         "percentile_50": "N/A",
         "percentile_99": "N/A",
-        "percentile_999": "N/A",
-        "bandwidth_gbps": "N/A",
-        "message_rate": "N/A"
+        "percentile_999": "N/A"
     }
     
     # Extract latency metrics
@@ -279,31 +268,6 @@ def extract_metrics(latency_file: str, bandwidth_file: str, five_tuple: str, deb
                 print(f"DEBUG: First 100 characters of content: {content[:100]}")
                 print(f"DEBUG: File size: {os.path.getsize(latency_file)} bytes")
     
-    # Extract bandwidth metrics
-    if os.path.exists(bandwidth_file):
-        debug_print(f"Extracting metrics from {bandwidth_file}", debug)
-        
-        with open(bandwidth_file, 'r') as f:
-            content = f.read()
-            
-            # Extract message rate
-            msg_rate_match = re.search(r"Message Rate is ([0-9.]+)", content)
-            if msg_rate_match:
-                metrics["message_rate"] = msg_rate_match.group(1)
-            
-            # Extract bandwidth
-            bw_patterns = [
-                r"Throughput: ([0-9.]+)",
-                r"BandWidth is [0-9.]+ MBps \(([0-9.]+) Mbps\)"
-            ]
-            
-            for pattern in bw_patterns:
-                bw_match = re.search(pattern, content)
-                if bw_match:
-                    bandwidth_mbps = float(bw_match.group(1))
-                    metrics["bandwidth_gbps"] = f"{bandwidth_mbps / 1000:.3f}"
-                    break
-    
     return metrics
 
 def calculate_improvement(eni_value: str, srd_value: str) -> str:
@@ -325,23 +289,7 @@ def calculate_improvement(eni_value: str, srd_value: str) -> str:
     except (ValueError, ZeroDivisionError):
         return "N/A"
 
-def calculate_bandwidth_improvement(eni_value: str, srd_value: str) -> str:
-    """Calculate bandwidth improvement percentage between ENI and SRD values."""
-    if eni_value == "N/A" or srd_value == "N/A":
-        return "N/A"
-    
-    try:
-        eni_float = float(eni_value)
-        srd_float = float(srd_value)
-        
-        if eni_float <= 0:
-            return "N/A"
-        
-        # For bandwidth metrics, improvement is (SRD - ENI) / ENI * 100
-        improvement = ((srd_float - eni_float) / eni_float) * 100
-        return f"{improvement:.2f}"
-    except (ValueError, ZeroDivisionError):
-        return "N/A"
+# Removed bandwidth improvement calculation function as it's no longer needed
 
 def format_table_row(columns: List[str], widths: List[int], colors: List[str] = None) -> str:
     """Format a row in the table with proper alignment and colors."""
@@ -390,13 +338,13 @@ def run_tests(debug: bool = False) -> Dict:
     
     # Write headers to summary files
     with open(eni_summary_file, 'w') as f:
-        f.write("Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th,Bandwidth_Gbps,Message_Rate\n")
+        f.write("Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th\n")
     
     with open(srd_summary_file, 'w') as f:
-        f.write("Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th,Bandwidth_Gbps,Message_Rate\n")
+        f.write("Iteration,Repeat,Timestamp,Source_IP,Source_Port,Dest_IP,Dest_Port,Protocol,MPS,Avg_Latency_usec,Min_Latency_usec,Max_Latency_usec,Percentile_50th,Percentile_99th,Percentile_99.9th\n")
     
     with open(comparison_file, 'w') as f:
-        f.write("Iteration,Repeat,Timestamp,Protocol,ENI_5Tuple,SRD_5Tuple,ENI_Avg,SRD_Avg,ENI_p50,SRD_p50,ENI_p99,SRD_p99,ENI_Max,SRD_Max,Improvement_Avg_Percent,Improvement_p50_Percent,Improvement_p99_Percent,Improvement_Max_Percent,ENI_BW,SRD_BW,BW_Improvement_Percent\n")
+        f.write("Iteration,Repeat,Timestamp,Protocol,ENI_5Tuple,SRD_5Tuple,ENI_Avg,SRD_Avg,ENI_p50,SRD_p50,ENI_p99,SRD_p99,ENI_Max,SRD_Max,Improvement_Avg_Percent,Improvement_p50_Percent,Improvement_p99_Percent,Improvement_Max_Percent\n")
     
     # Check if sockperf servers are running
     if not check_sockperf_server(SERVER_IP_ENI, SERVER_PORT_ENI, "ENI", debug):
@@ -420,40 +368,26 @@ def run_tests(debug: bool = False) -> Dict:
             
             # Define output files
             eni_latency_output = f"{output_dir}/eni/iteration_{i}_repeat_{j}_udp_latency.log"
-            eni_bandwidth_output = f"{output_dir}/eni/iteration_{i}_repeat_{j}_udp_bandwidth.log"
             srd_latency_output = f"{output_dir}/srd/iteration_{i}_repeat_{j}_udp_latency.log"
-            srd_bandwidth_output = f"{output_dir}/srd/iteration_{i}_repeat_{j}_udp_bandwidth.log"
             
             print("Running UDP tests...")
             
             # Run tests in parallel using ThreadPoolExecutor
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                # Submit all tests
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                # Submit latency tests
                 eni_latency_future = executor.submit(
-                    run_sockperf_test, "ENI", "latency", SERVER_IP_ENI, SERVER_PORT_ENI,
+                    run_sockperf_test, "ENI", SERVER_IP_ENI, SERVER_PORT_ENI,
                     CLIENT_IP_ENI, CLIENT_PINGPONG_PORT_ENI, eni_latency_output, i, j, debug
                 )
                 
-                eni_bandwidth_future = executor.submit(
-                    run_sockperf_test, "ENI", "bandwidth", SERVER_IP_ENI, SERVER_PORT_ENI,
-                    CLIENT_IP_ENI, CLIENT_BANDWIDTH_PORT_ENI, eni_bandwidth_output, i, j, debug
-                )
-                
                 srd_latency_future = executor.submit(
-                    run_sockperf_test, "SRD", "latency", SERVER_IP_SRD, SERVER_PORT_SRD,
+                    run_sockperf_test, "SRD", SERVER_IP_SRD, SERVER_PORT_SRD,
                     CLIENT_IP_SRD, CLIENT_PINGPONG_PORT_SRD, srd_latency_output, i, j, debug
-                )
-                
-                srd_bandwidth_future = executor.submit(
-                    run_sockperf_test, "SRD", "bandwidth", SERVER_IP_SRD, SERVER_PORT_SRD,
-                    CLIENT_IP_SRD, CLIENT_BANDWIDTH_PORT_SRD, srd_bandwidth_output, i, j, debug
                 )
                 
                 # Wait for all tests to complete
                 eni_latency_result = eni_latency_future.result()
-                eni_bandwidth_result = eni_bandwidth_future.result()
                 srd_latency_result = srd_latency_future.result()
-                srd_bandwidth_result = srd_bandwidth_future.result()
             
             # Process test results
             print("Processing UDP test results...")
@@ -463,35 +397,33 @@ def run_tests(debug: bool = False) -> Dict:
             srd_udp_5tuple = f"{CLIENT_IP_SRD}:{CLIENT_PINGPONG_PORT_SRD}->{SERVER_IP_SRD}:{SERVER_PORT_SRD}/UDP"
             
             # Extract metrics
-            eni_metrics = extract_metrics(eni_latency_output, eni_bandwidth_output, eni_udp_5tuple, debug)
-            srd_metrics = extract_metrics(srd_latency_output, srd_bandwidth_output, srd_udp_5tuple, debug)
+            eni_metrics = extract_metrics(eni_latency_output, eni_udp_5tuple, debug)
+            srd_metrics = extract_metrics(srd_latency_output, srd_udp_5tuple, debug)
             
             # Calculate improvement percentages
             avg_improvement = calculate_improvement(eni_metrics["avg_latency"], srd_metrics["avg_latency"])
             p50_improvement = calculate_improvement(eni_metrics["percentile_50"], srd_metrics["percentile_50"])
             p99_improvement = calculate_improvement(eni_metrics["percentile_99"], srd_metrics["percentile_99"])
             max_improvement = calculate_improvement(eni_metrics["max_latency"], srd_metrics["max_latency"])
-            bw_improvement = calculate_bandwidth_improvement(eni_metrics["bandwidth_gbps"], srd_metrics["bandwidth_gbps"])
             
             # Format improvement percentages for display
             avg_improvement_display = f"{avg_improvement}%" if avg_improvement != "N/A" else "N/A"
             p50_improvement_display = f"{p50_improvement}%" if p50_improvement != "N/A" else "N/A"
             p99_improvement_display = f"{p99_improvement}%" if p99_improvement != "N/A" else "N/A"
             max_improvement_display = f"{max_improvement}%" if max_improvement != "N/A" else "N/A"
-            bw_improvement_display = f"{bw_improvement}%" if bw_improvement != "N/A" else "N/A"
             
             # Log to ENI summary file
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(eni_summary_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},{CLIENT_IP_ENI},{CLIENT_PINGPONG_PORT_ENI},{SERVER_IP_ENI},{SERVER_PORT_ENI},UDP,{MPS},{eni_metrics['avg_latency']},{eni_metrics['min_latency']},{eni_metrics['max_latency']},{eni_metrics['percentile_50']},{eni_metrics['percentile_99']},{eni_metrics['percentile_999']},{eni_metrics['bandwidth_gbps']},{eni_metrics['message_rate']}\n")
+                f.write(f"{i},{j},{timestamp},{CLIENT_IP_ENI},{CLIENT_PINGPONG_PORT_ENI},{SERVER_IP_ENI},{SERVER_PORT_ENI},UDP,{MPS},{eni_metrics['avg_latency']},{eni_metrics['min_latency']},{eni_metrics['max_latency']},{eni_metrics['percentile_50']},{eni_metrics['percentile_99']},{eni_metrics['percentile_999']}\n")
             
             # Log to SRD summary file
             with open(srd_summary_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},{CLIENT_IP_SRD},{CLIENT_PINGPONG_PORT_SRD},{SERVER_IP_SRD},{SERVER_PORT_SRD},UDP,{MPS},{srd_metrics['avg_latency']},{srd_metrics['min_latency']},{srd_metrics['max_latency']},{srd_metrics['percentile_50']},{srd_metrics['percentile_99']},{srd_metrics['percentile_999']},{srd_metrics['bandwidth_gbps']},{srd_metrics['message_rate']}\n")
+                f.write(f"{i},{j},{timestamp},{CLIENT_IP_SRD},{CLIENT_PINGPONG_PORT_SRD},{SERVER_IP_SRD},{SERVER_PORT_SRD},UDP,{MPS},{srd_metrics['avg_latency']},{srd_metrics['min_latency']},{srd_metrics['max_latency']},{srd_metrics['percentile_50']},{srd_metrics['percentile_99']},{srd_metrics['percentile_999']}\n")
             
             # Log to comparison file
             with open(comparison_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},UDP,\"{eni_udp_5tuple}\",\"{srd_udp_5tuple}\",{eni_metrics['avg_latency']},{srd_metrics['avg_latency']},{eni_metrics['percentile_50']},{srd_metrics['percentile_50']},{eni_metrics['percentile_99']},{srd_metrics['percentile_99']},{eni_metrics['max_latency']},{srd_metrics['max_latency']},{avg_improvement},{p50_improvement},{p99_improvement},{max_improvement},{eni_metrics['bandwidth_gbps']},{srd_metrics['bandwidth_gbps']},{bw_improvement}\n")
+                f.write(f"{i},{j},{timestamp},UDP,\"{eni_udp_5tuple}\",\"{srd_udp_5tuple}\",{eni_metrics['avg_latency']},{srd_metrics['avg_latency']},{eni_metrics['percentile_50']},{srd_metrics['percentile_50']},{eni_metrics['percentile_99']},{srd_metrics['percentile_99']},{eni_metrics['max_latency']},{srd_metrics['max_latency']},{avg_improvement},{p50_improvement},{p99_improvement},{max_improvement}\n")
             
             # Store results for this iteration
             iteration_result = {
@@ -512,14 +444,10 @@ def run_tests(debug: bool = False) -> Dict:
                 "p50_improvement": p50_improvement,
                 "p99_improvement": p99_improvement,
                 "max_improvement": max_improvement,
-                "eni_bw": eni_metrics["bandwidth_gbps"],
-                "srd_bw": srd_metrics["bandwidth_gbps"],
-                "bw_improvement": bw_improvement,
                 "avg_improvement_display": avg_improvement_display,
                 "p50_improvement_display": p50_improvement_display,
                 "p99_improvement_display": p99_improvement_display,
-                "max_improvement_display": max_improvement_display,
-                "bw_improvement_display": bw_improvement_display
+                "max_improvement_display": max_improvement_display
             }
             
             all_results.append(iteration_result)
@@ -532,7 +460,6 @@ def run_tests(debug: bool = False) -> Dict:
             print(f"ENI p50: {eni_metrics['percentile_50']} μs | SRD p50: {srd_metrics['percentile_50']} μs | Improvement: {p50_improvement_display}")
             print(f"ENI p99: {eni_metrics['percentile_99']} μs | SRD p99: {srd_metrics['percentile_99']} μs | Improvement: {p99_improvement_display}")
             print(f"ENI MAX: {eni_metrics['max_latency']} μs | SRD MAX: {srd_metrics['max_latency']} μs | Improvement: {max_improvement_display}")
-            print(f"ENI BW: {eni_metrics['bandwidth_gbps']} Gbps | SRD BW: {srd_metrics['bandwidth_gbps']} Gbps | Improvement: {bw_improvement_display}")
             print("-" * 53)
             
             # Optional delay between repeats
@@ -564,29 +491,23 @@ def run_tests(debug: bool = False) -> Dict:
         udp_srd_p99 = sum(float(r["srd_p99"]) for r in all_results if r["srd_p99"] != "N/A") / len(all_results)
         udp_eni_max = sum(float(r["eni_max"]) for r in all_results if r["eni_max"] != "N/A") / len(all_results)
         udp_srd_max = sum(float(r["srd_max"]) for r in all_results if r["srd_max"] != "N/A") / len(all_results)
-        udp_eni_bw = sum(float(r["eni_bw"]) for r in all_results if r["eni_bw"] != "N/A") / len(all_results)
-        udp_srd_bw = sum(float(r["srd_bw"]) for r in all_results if r["srd_bw"] != "N/A") / len(all_results)
         
         # Calculate overall improvement percentages
         udp_avg_improvement = ((udp_eni_avg - udp_srd_avg) / udp_eni_avg) * 100 if udp_eni_avg > 0 else 0
         udp_p50_improvement = ((udp_eni_p50 - udp_srd_p50) / udp_eni_p50) * 100 if udp_eni_p50 > 0 else 0
         udp_p99_improvement = ((udp_eni_p99 - udp_srd_p99) / udp_eni_p99) * 100 if udp_eni_p99 > 0 else 0
         udp_max_improvement = ((udp_eni_max - udp_srd_max) / udp_eni_max) * 100 if udp_eni_max > 0 else 0
-        udp_bw_improvement = ((udp_srd_bw - udp_eni_bw) / udp_eni_bw) * 100 if udp_eni_bw > 0 else 0
         
         # Format for display
         udp_avg_improvement_display = f"{udp_avg_improvement:.2f}%"
         udp_p50_improvement_display = f"{udp_p50_improvement:.2f}%"
         udp_p99_improvement_display = f"{udp_p99_improvement:.2f}%"
         udp_max_improvement_display = f"{udp_max_improvement:.2f}%"
-        udp_bw_improvement_display = f"{udp_bw_improvement:.2f}%"
     else:
         udp_eni_avg = udp_srd_avg = udp_eni_p50 = udp_srd_p50 = 0
         udp_eni_p99 = udp_srd_p99 = udp_eni_max = udp_srd_max = 0
-        udp_eni_bw = udp_srd_bw = 0
         udp_avg_improvement_display = udp_p50_improvement_display = "N/A"
         udp_p99_improvement_display = udp_max_improvement_display = "N/A"
-        udp_bw_improvement_display = "N/A"
     
     # Create summary report
     summary_report = f"{output_dir}/summary_report.txt"
@@ -740,70 +661,7 @@ def run_tests(debug: bool = False) -> Dict:
         else:
             print(f"│   Improvement: {Colors.RED}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_max_improvement_display))}│")
         
-        # Write UDP Throughput (Bandwidth) Results section
-        section_lines = format_table_section("UDP Throughput (Bandwidth) Results", table_width)
-        for line in section_lines:
-            f.write(f"{line}\n")
-            print(line)
-        
-        # Format UDP bandwidth results with colors based on improvement
-        # For bandwidth metrics, negative improvement (red) is bad, positive (green) is good
-        
-        # Bandwidth
-        f.write(f"│ Bandwidth:{' ' * (table_width - 12)}│\n")
-        f.write(f"│   Regular ENI: {udp_eni_bw:.3f} Gbps{' ' * (table_width - 24 - len(f'{udp_eni_bw:.3f}'))}│\n")
-        f.write(f"│   ENA Express: {udp_srd_bw:.3f} Gbps{' ' * (table_width - 24 - len(f'{udp_srd_bw:.3f}'))}│\n")
-        
-        if udp_bw_improvement >= 0:
-            improvement_color = Colors.GREEN
-        else:
-            improvement_color = Colors.RED
-        
-        f.write(f"│   Improvement: {improvement_color}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
-        
-        print(f"│ Bandwidth:{' ' * (table_width - 12)}│")
-        print(f"│   Regular ENI: {udp_eni_bw:.3f} Gbps{' ' * (table_width - 24 - len(f'{udp_eni_bw:.3f}'))}│")
-        print(f"│   ENA Express: {udp_srd_bw:.3f} Gbps{' ' * (table_width - 24 - len(f'{udp_srd_bw:.3f}'))}│")
-        
-        if udp_bw_improvement >= 0:
-            print(f"│   Improvement: {Colors.GREEN}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│")
-        else:
-            print(f"│   Improvement: {Colors.RED}{udp_bw_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(udp_bw_improvement_display))}│")
-        
-        # Message Rate
-        f.write(f"│ Message Rate:{' ' * (table_width - 15)}│\n")
-        f.write(f"│   Regular ENI: {eni_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(eni_metrics['message_rate']))}│\n")
-        f.write(f"│   ENA Express: {srd_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(srd_metrics['message_rate']))}│\n")
-        
-        # Calculate message rate improvement
-        if eni_metrics['message_rate'] != "N/A" and srd_metrics['message_rate'] != "N/A":
-            try:
-                eni_mr = float(eni_metrics['message_rate'])
-                srd_mr = float(srd_metrics['message_rate'])
-                if eni_mr > 0:
-                    mr_improvement = ((srd_mr - eni_mr) / eni_mr) * 100
-                    mr_improvement_display = f"{mr_improvement:.2f}%"
-                    if mr_improvement >= 0:
-                        mr_improvement_color = Colors.GREEN
-                    else:
-                        mr_improvement_color = Colors.RED
-                else:
-                    mr_improvement_display = "N/A"
-                    mr_improvement_color = Colors.ENDC
-            except (ValueError, ZeroDivisionError):
-                mr_improvement_display = "N/A"
-                mr_improvement_color = Colors.ENDC
-        else:
-            mr_improvement_display = "N/A"
-            mr_improvement_color = Colors.ENDC
-        
-        f.write(f"│   Improvement: {mr_improvement_color}{mr_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(mr_improvement_display))}│\n")
-        
-        print(f"│ Message Rate:{' ' * (table_width - 15)}│")
-        print(f"│   Regular ENI: {eni_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(eni_metrics['message_rate']))}│")
-        print(f"│   ENA Express: {srd_metrics['message_rate']} msg/sec{' ' * (table_width - 28 - len(srd_metrics['message_rate']))}│")
-        print(f"│   Improvement: {mr_improvement_color}{mr_improvement_display}{Colors.ENDC}{' ' * (table_width - 16 - len(mr_improvement_display))}│")
+        # Write footer directly after the latency results
         
         # Write footer
         footer = format_table_section(f"Results saved in: {output_dir}", table_width)
@@ -827,8 +685,7 @@ def run_tests(debug: bool = False) -> Dict:
         # Write Regular ENI UDP details
         f.write(f"│ Regular ENI UDP:{' ' * (table_width - 18)}│\n")
         f.write(f"│   Source IP: {CLIENT_IP_ENI}{' ' * (table_width - 15 - len(CLIENT_IP_ENI))}│\n")
-        f.write(f"│   Source Port (Latency): {CLIENT_PINGPONG_PORT_ENI}{' ' * (table_width - 27 - len(str(CLIENT_PINGPONG_PORT_ENI)))}│\n")
-        f.write(f"│   Source Port (Bandwidth): {CLIENT_BANDWIDTH_PORT_ENI}{' ' * (table_width - 30 - len(str(CLIENT_BANDWIDTH_PORT_ENI)))}│\n")
+        f.write(f"│   Source Port: {CLIENT_PINGPONG_PORT_ENI}{' ' * (table_width - 16 - len(str(CLIENT_PINGPONG_PORT_ENI)))}│\n")
         f.write(f"│   Destination IP: {SERVER_IP_ENI}{' ' * (table_width - 20 - len(SERVER_IP_ENI))}│\n")
         f.write(f"│   Destination Port: {SERVER_PORT_ENI}{' ' * (table_width - 22 - len(str(SERVER_PORT_ENI)))}│\n")
         f.write(f"│   Protocol: UDP{' ' * (table_width - 16)}│\n")
@@ -837,8 +694,7 @@ def run_tests(debug: bool = False) -> Dict:
         # Write ENA Express UDP details
         f.write(f"│ ENA Express UDP:{' ' * (table_width - 18)}│\n")
         f.write(f"│   Source IP: {CLIENT_IP_SRD}{' ' * (table_width - 15 - len(CLIENT_IP_SRD))}│\n")
-        f.write(f"│   Source Port (Latency): {CLIENT_PINGPONG_PORT_SRD}{' ' * (table_width - 27 - len(str(CLIENT_PINGPONG_PORT_SRD)))}│\n")
-        f.write(f"│   Source Port (Bandwidth): {CLIENT_BANDWIDTH_PORT_SRD}{' ' * (table_width - 30 - len(str(CLIENT_BANDWIDTH_PORT_SRD)))}│\n")
+        f.write(f"│   Source Port: {CLIENT_PINGPONG_PORT_SRD}{' ' * (table_width - 16 - len(str(CLIENT_PINGPONG_PORT_SRD)))}│\n")
         f.write(f"│   Destination IP: {SERVER_IP_SRD}{' ' * (table_width - 20 - len(SERVER_IP_SRD))}│\n")
         f.write(f"│   Destination Port: {SERVER_PORT_SRD}{' ' * (table_width - 22 - len(str(SERVER_PORT_SRD)))}│\n")
         f.write(f"│   Protocol: UDP{' ' * (table_width - 16)}│\n")
