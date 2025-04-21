@@ -124,282 +124,104 @@ def run_sockperf_test(test_type: str, remote_ip: str, remote_port: int,
         print(f"Error running sockperf test: {e}")
         return False
 
-def extract_metrics(latency_file: str, five_tuple: str, debug: bool = False) -> Dict[str, str]:
-    """Extract metrics from sockperf latency output file."""
-    metrics = {
-        "five_tuple": five_tuple,
-        "avg_latency": "N/A",
-        "min_latency": "N/A",
-        "max_latency": "N/A",
-        "percentile_50": "N/A",
-        "percentile_99": "N/A",
-        "percentile_999": "N/A",
-        "runtime": "N/A",
-        "sent_messages": "N/A",
-        "received_messages": "N/A",
-        "dropped_messages": "N/A",
-        "duplicated_messages": "N/A",
-        "out_of_order_messages": "N/A",
-        "std_dev": "N/A",
-        "mean_ad": "N/A",
-        "median_ad": "N/A",
-        "siqr": "N/A",
-        "cv": "N/A",
-        "std_error": "N/A",
-        "percentile_25": "N/A",
-        "percentile_75": "N/A",
-        "percentile_90": "N/A",
-        "percentile_9999": "N/A",
-        "percentile_99999": "N/A"
-    }
+def extract_metrics_from_file(file_path):
+    """Extract metrics directly from the sockperf output file."""
+    metrics = {}
     
-    # Extract latency metrics
-    if os.path.exists(latency_file):
-        debug_print(f"Extracting metrics from {latency_file}", debug)
-        
-        with open(latency_file, 'r') as f:
-            content = f.read()
-            
-            # Extract runtime, sent messages, received messages
-            valid_duration_match = re.search(r"\[Valid Duration\] RunTime=([0-9.]+) sec; SentMessages=([0-9]+); ReceivedMessages=([0-9]+)", content)
-            if valid_duration_match:
-                metrics["runtime"] = valid_duration_match.group(1)
-                metrics["sent_messages"] = valid_duration_match.group(2)
-                metrics["received_messages"] = valid_duration_match.group(3)
-            
-            # Extract dropped, duplicated, out-of-order messages
-            messages_match = re.search(r"# dropped messages = ([0-9]+); # duplicated messages = ([0-9]+); # out-of-order messages = ([0-9]+)", content)
-            if messages_match:
-                metrics["dropped_messages"] = messages_match.group(1)
-                metrics["duplicated_messages"] = messages_match.group(2)
-                metrics["out_of_order_messages"] = messages_match.group(3)
-            
-            # Extract std-dev, mean-ad, median-ad, siqr, cv, std-error
-            stats_match = re.search(r"avg-latency=[0-9.]+ \(std-dev=([0-9.]+), mean-ad=([0-9.]+), median-ad=([0-9.]+), siqr=([0-9.]+), cv=([0-9.]+), std-error=([0-9.]+)", content)
-            if stats_match:
-                metrics["std_dev"] = stats_match.group(1)
-                metrics["mean_ad"] = stats_match.group(2)
-                metrics["median_ad"] = stats_match.group(3)
-                metrics["siqr"] = stats_match.group(4)
-                metrics["cv"] = stats_match.group(5)
-                metrics["std_error"] = stats_match.group(6)
-            
-            # Extract percentiles
-            percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
-            if percentile_section:
-                section_text = percentile_section.group(0)
-                
-                # Extract P25
-                p25_match = re.search(r"---> percentile 25\.0+\s*=\s*([0-9.]+)", section_text)
-                if p25_match:
-                    metrics["percentile_25"] = p25_match.group(1)
-                
-                # Extract P75
-                p75_match = re.search(r"---> percentile 75\.0+\s*=\s*([0-9.]+)", section_text)
-                if p75_match:
-                    metrics["percentile_75"] = p75_match.group(1)
-                
-                # Extract P90
-                p90_match = re.search(r"---> percentile 90\.0+\s*=\s*([0-9.]+)", section_text)
-                if p90_match:
-                    metrics["percentile_90"] = p90_match.group(1)
-                
-                # Extract P99.99
-                p9999_match = re.search(r"---> percentile 99\.99\d*\s*=\s*([0-9.]+)", section_text)
-                if p9999_match:
-                    metrics["percentile_9999"] = p9999_match.group(1)
-                
-                # Extract P99.999
-                p99999_match = re.search(r"---> percentile 99\.999\d*\s*=\s*([0-9.]+)", section_text)
-                if p99999_match:
-                    metrics["percentile_99999"] = p99999_match.group(1)
-            
-            # Try multiple patterns for average latency
-            avg_patterns = [
-                r"avg-lat=([0-9.]+)",
-                r"Summary: Latency is ([0-9.]+)",
-                r"Average latency.*: ([0-9.]+)",
-                r"avg.*latency.*: ([0-9.]+)",
-                r"average.*: ([0-9.]+)",
-                r"latency average: ([0-9.]+)",
-                r"average = ([0-9.]+)"
-            ]
-            
-            for pattern in avg_patterns:
-                avg_match = re.search(pattern, content)
-                if avg_match:
-                    metrics["avg_latency"] = avg_match.group(1)
-                    break
-            
-            # Try multiple patterns for min latency
-            min_patterns = [
-                r"min-lat=([0-9.]+)",
-                r"<MIN> observation = ([0-9.]+)",
-                r"Min latency = ([0-9.]+)"
-            ]
-            
-            for pattern in min_patterns:
-                min_match = re.search(pattern, content)
-                if min_match:
-                    metrics["min_latency"] = min_match.group(1)
-                    break
-            
-            # Try multiple patterns for max latency
-            max_patterns = [
-                r"max-lat=([0-9.]+)",
-                r"<MAX> observation = ([0-9.]+)",
-                r"Max latency = ([0-9.]+)",
-                r"---> <MAX> observation = ([0-9.]+)",
-                r"---> <MAX> observation =\s+([0-9.]+)",
-                r"sockperf: ---> <MAX> observation =\s+([0-9.]+)"
-            ]
-            
-            for pattern in max_patterns:
-                max_match = re.search(pattern, content)
-                if max_match:
-                    metrics["max_latency"] = max_match.group(1)
-                    break
-            
-            # Try multiple patterns for p50 latency
-            p50_patterns = [
-                r"median-lat=([0-9.]+)",
-                r"percentile 50\.00.? = ([0-9.]+)",
-                r"percentile 50.? = ([0-9.]+)",
-                r"---> percentile 50\.000 = ([0-9.]+)",
-                r"---> percentile 50\.00 = ([0-9.]+)",
-                r"---> percentile 50\.0 = ([0-9.]+)",
-                r"---> percentile 50 = ([0-9.]+)",
-                r"---> percentile 50\.000 =\s+([0-9.]+)",
-                r"sockperf: ---> percentile 50\.000 =\s+([0-9.]+)"
-            ]
-            
-            for pattern in p50_patterns:
-                p50_match = re.search(pattern, content)
-                if p50_match:
-                    metrics["percentile_50"] = p50_match.group(1)
-                    break
-                
-            # If we still don't have p50, try to find it in the percentile section
-            if metrics["percentile_50"] == "N/A":
-                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
-                if percentile_section:
-                    section_text = percentile_section.group(0)
-                    p50_match = re.search(r"---> percentile 50[\.0]* = ([0-9.]+)", section_text)
-                    if p50_match:
-                        metrics["percentile_50"] = p50_match.group(1)
-            
-            # Try multiple patterns for p99 latency
-            p99_patterns = [
-                r"percentile 99\.00.? = ([0-9.]+)",
-                r"percentile 99.? = ([0-9.]+)",
-                r"---> percentile 99\.000 = ([0-9.]+)",
-                r"---> percentile 99\.00 = ([0-9.]+)",
-                r"---> percentile 99\.0 = ([0-9.]+)",
-                r"---> percentile 99 = ([0-9.]+)",
-                r"---> percentile 99\.000 =\s+([0-9.]+)",
-                r"sockperf: ---> percentile 99\.000 =\s+([0-9.]+)"
-            ]
-            
-            for pattern in p99_patterns:
-                p99_match = re.search(pattern, content)
-                if p99_match:
-                    metrics["percentile_99"] = p99_match.group(1)
-                    break
-                
-            # If we still don't have p99, try to find it in the percentile section
-            if metrics["percentile_99"] == "N/A":
-                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
-                if percentile_section:
-                    section_text = percentile_section.group(0)
-                    p99_match = re.search(r"---> percentile 99[\.0]* = ([0-9.]+)", section_text)
-                    if p99_match:
-                        metrics["percentile_99"] = p99_match.group(1)
-            
-            # Try multiple patterns for p99.9 latency
-            p999_patterns = [
-                r"percentile 99\.90.? = ([0-9.]+)",
-                r"percentile 99\.9.? = ([0-9.]+)",
-                r"---> percentile 99\.900 = ([0-9.]+)",
-                r"---> percentile 99\.90 = ([0-9.]+)",
-                r"---> percentile 99\.9 = ([0-9.]+)"
-            ]
-            
-            for pattern in p999_patterns:
-                p999_match = re.search(pattern, content)
-                if p999_match:
-                    metrics["percentile_999"] = p999_match.group(1)
-                    break
-                
-            # If we still don't have p99.9, try to find it in the percentile section
-            if metrics["percentile_999"] == "N/A":
-                percentile_section = re.search(r"Total \d+ observations.*?---> <MIN>.*?---> <MAX>", content, re.DOTALL)
-                if percentile_section:
-                    section_text = percentile_section.group(0)
-                    p999_match = re.search(r"---> percentile 99\.9[0]* = ([0-9.]+)", section_text)
-                    if p999_match:
-                        metrics["percentile_999"] = p999_match.group(1)
-                    
-            # If we still don't have metrics, print some debug info
-            if debug and metrics["avg_latency"] == "N/A":
-                print(f"DEBUG: Could not extract metrics from {latency_file}")
-                print(f"DEBUG: First 100 characters of content: {content[:100]}")
-                print(f"DEBUG: File size: {os.path.getsize(latency_file)} bytes")
+    if not os.path.exists(file_path):
+        return metrics
+    
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    # Extract runtime, sent messages, received messages
+    valid_duration = re.search(r"\[Valid Duration\] RunTime=([0-9.]+) sec; SentMessages=([0-9]+); ReceivedMessages=([0-9]+)", content)
+    if valid_duration:
+        metrics["runtime"] = valid_duration.group(1)
+        metrics["sent_messages"] = valid_duration.group(2)
+        metrics["received_messages"] = valid_duration.group(3)
+    
+    # Extract dropped, duplicated, out-of-order messages
+    messages = re.search(r"# dropped messages = ([0-9]+); # duplicated messages = ([0-9]+); # out-of-order messages = ([0-9]+)", content)
+    if messages:
+        metrics["dropped_messages"] = messages.group(1)
+        metrics["duplicated_messages"] = messages.group(2)
+        metrics["out_of_order_messages"] = messages.group(3)
+    
+    # Extract avg-latency and related stats
+    stats = re.search(r"avg-latency=([0-9.]+) \(std-dev=([0-9.]+), mean-ad=([0-9.]+), median-ad=([0-9.]+), siqr=([0-9.]+), cv=([0-9.]+), std-error=([0-9.]+)", content)
+    if stats:
+        metrics["avg_latency"] = stats.group(1)
+        metrics["std_dev"] = stats.group(2)
+        metrics["mean_ad"] = stats.group(3)
+        metrics["median_ad"] = stats.group(4)
+        metrics["siqr"] = stats.group(5)
+        metrics["cv"] = stats.group(6)
+        metrics["std_error"] = stats.group(7)
+    
+    # Extract percentiles and min/max
+    # This approach directly searches for each percentile in the content
+    min_match = re.search(r"---> <MIN> observation =\s+([0-9.]+)", content)
+    if min_match:
+        metrics["min_latency"] = min_match.group(1)
+    
+    max_match = re.search(r"---> <MAX> observation =\s+([0-9.]+)", content)
+    if max_match:
+        metrics["max_latency"] = max_match.group(1)
+    
+    p25_match = re.search(r"---> percentile 25\.0+\s*=\s*([0-9.]+)", content)
+    if p25_match:
+        metrics["percentile_25"] = p25_match.group(1)
+    
+    p50_match = re.search(r"---> percentile 50\.0+\s*=\s*([0-9.]+)", content)
+    if p50_match:
+        metrics["percentile_50"] = p50_match.group(1)
+    
+    p75_match = re.search(r"---> percentile 75\.0+\s*=\s*([0-9.]+)", content)
+    if p75_match:
+        metrics["percentile_75"] = p75_match.group(1)
+    
+    p90_match = re.search(r"---> percentile 90\.0+\s*=\s*([0-9.]+)", content)
+    if p90_match:
+        metrics["percentile_90"] = p90_match.group(1)
+    
+    p99_match = re.search(r"---> percentile 99\.0+\s*=\s*([0-9.]+)", content)
+    if p99_match:
+        metrics["percentile_99"] = p99_match.group(1)
+    
+    p999_match = re.search(r"---> percentile 99\.9+\s*=\s*([0-9.]+)", content)
+    if p999_match:
+        metrics["percentile_999"] = p999_match.group(1)
+    
+    p9999_match = re.search(r"---> percentile 99\.99+\s*=\s*([0-9.]+)", content)
+    if p9999_match:
+        metrics["percentile_9999"] = p9999_match.group(1)
+    
+    p99999_match = re.search(r"---> percentile 99\.999+\s*=\s*([0-9.]+)", content)
+    if p99999_match:
+        metrics["percentile_99999"] = p99999_match.group(1)
     
     return metrics
 
-def calculate_improvement(eni_value: str, srd_value: str) -> str:
+def calculate_improvement(eni_value, srd_value):
     """Calculate improvement percentage between ENI and SRD values."""
-    if eni_value == "N/A" or srd_value == "N/A":
-        return "N/A"
+    if not eni_value or not srd_value:
+        return None
     
     try:
         eni_float = float(eni_value)
         srd_float = float(srd_value)
         
         if eni_float <= 0:
-            return "N/A"
+            return None
         
         # For latency metrics, improvement is (ENI - SRD) / ENI * 100
-        # For bandwidth metrics, improvement is (SRD - ENI) / ENI * 100
         improvement = ((eni_float - srd_float) / eni_float) * 100
-        return f"{improvement:.2f}"
-    except (ValueError, ZeroDivisionError):
-        return "N/A"
+        return improvement
+    except (ValueError, ZeroDivisionError, TypeError):
+        return None
 
-# Removed bandwidth improvement calculation function as it's no longer needed
-
-def format_table_row(columns: List[str], widths: List[int], colors: List[str] = None) -> str:
-    """Format a row in the table with proper alignment and colors."""
-    if colors is None:
-        colors = [Colors.ENDC] * len(columns)
-    
-    row = "│ "
-    for i, (col, width, color) in enumerate(zip(columns, widths, colors)):
-        row += f"{color}{col}{Colors.ENDC}".ljust(width + len(Colors.ENDC)) + " │ "
-    
-    return row
-
-def format_table_header(title: str, width: int) -> List[str]:
-    """Format the table header with title."""
-    header = []
-    header.append("┌" + "─" * (width - 2) + "┐")
-    header.append("│" + f"{Colors.BOLD}{title.center(width - 2)}{Colors.ENDC}" + "│")
-    header.append("├" + "─" * (width - 2) + "┤")
-    return header
-
-def format_table_section(title: str, width: int) -> List[str]:
-    """Format a section header in the table."""
-    section = []
-    section.append("├" + "─" * (width - 2) + "┤")
-    section.append("│" + f"{Colors.BOLD}{title.center(width - 2)}{Colors.ENDC}" + "│")
-    section.append("├" + "─" * (width - 2) + "┤")
-    return section
-
-def format_table_footer(width: int) -> str:
-    """Format the table footer."""
-    return "└" + "─" * (width - 2) + "┘"
-
-def run_tests(debug: bool = False) -> Dict:
+def run_tests(debug=False):
     """Run all tests and return the results."""
     # Create output directories
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -474,60 +296,8 @@ def run_tests(debug: bool = False) -> Dict:
             srd_udp_5tuple = f"{CLIENT_IP_SRD}:{CLIENT_PINGPONG_PORT_SRD}->{SERVER_IP_SRD}:{SERVER_PORT_SRD}/UDP"
             
             # Extract metrics
-            eni_metrics = extract_metrics(eni_latency_output, eni_udp_5tuple, debug)
-            srd_metrics = extract_metrics(srd_latency_output, srd_udp_5tuple, debug)
-            
-            # Calculate improvement percentages
-            avg_improvement = calculate_improvement(eni_metrics["avg_latency"], srd_metrics["avg_latency"])
-            p50_improvement = calculate_improvement(eni_metrics["percentile_50"], srd_metrics["percentile_50"])
-            p99_improvement = calculate_improvement(eni_metrics["percentile_99"], srd_metrics["percentile_99"])
-            max_improvement = calculate_improvement(eni_metrics["max_latency"], srd_metrics["max_latency"])
-            
-            # Format improvement percentages for display
-            avg_improvement_display = f"{avg_improvement}%" if avg_improvement != "N/A" else "N/A"
-            p50_improvement_display = f"{p50_improvement}%" if p50_improvement != "N/A" else "N/A"
-            p99_improvement_display = f"{p99_improvement}%" if p99_improvement != "N/A" else "N/A"
-            max_improvement_display = f"{max_improvement}%" if max_improvement != "N/A" else "N/A"
-            
-            # Log to ENI summary file
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(eni_summary_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},{CLIENT_IP_ENI},{CLIENT_PINGPONG_PORT_ENI},{SERVER_IP_ENI},{SERVER_PORT_ENI},UDP,{MPS},{eni_metrics['avg_latency']},{eni_metrics['min_latency']},{eni_metrics['max_latency']},{eni_metrics['percentile_50']},{eni_metrics['percentile_99']},{eni_metrics['percentile_999']}\n")
-            
-            # Log to SRD summary file
-            with open(srd_summary_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},{CLIENT_IP_SRD},{CLIENT_PINGPONG_PORT_SRD},{SERVER_IP_SRD},{SERVER_PORT_SRD},UDP,{MPS},{srd_metrics['avg_latency']},{srd_metrics['min_latency']},{srd_metrics['max_latency']},{srd_metrics['percentile_50']},{srd_metrics['percentile_99']},{srd_metrics['percentile_999']}\n")
-            
-            # Log to comparison file
-            with open(comparison_file, 'a') as f:
-                f.write(f"{i},{j},{timestamp},UDP,\"{eni_udp_5tuple}\",\"{srd_udp_5tuple}\",{eni_metrics['avg_latency']},{srd_metrics['avg_latency']},{eni_metrics['percentile_50']},{srd_metrics['percentile_50']},{eni_metrics['percentile_99']},{srd_metrics['percentile_99']},{eni_metrics['max_latency']},{srd_metrics['max_latency']},{avg_improvement},{p50_improvement},{p99_improvement},{max_improvement}\n")
-            
-            # Store results for this iteration
-            iteration_result = {
-                "iteration": i,
-                "repeat": j,
-                "timestamp": timestamp,
-                "eni_5tuple": eni_udp_5tuple,
-                "srd_5tuple": srd_udp_5tuple,
-                "eni_avg": eni_metrics["avg_latency"],
-                "srd_avg": srd_metrics["avg_latency"],
-                "eni_p50": eni_metrics["percentile_50"],
-                "srd_p50": srd_metrics["percentile_50"],
-                "eni_p99": eni_metrics["percentile_99"],
-                "srd_p99": srd_metrics["percentile_99"],
-                "eni_max": eni_metrics["max_latency"],
-                "srd_max": srd_metrics["max_latency"],
-                "avg_improvement": avg_improvement,
-                "p50_improvement": p50_improvement,
-                "p99_improvement": p99_improvement,
-                "max_improvement": max_improvement,
-                "avg_improvement_display": avg_improvement_display,
-                "p50_improvement_display": p50_improvement_display,
-                "p99_improvement_display": p99_improvement_display,
-                "max_improvement_display": max_improvement_display
-            }
-            
-            all_results.append(iteration_result)
+            eni_metrics = extract_metrics_from_file(eni_latency_output)
+            srd_metrics = extract_metrics_from_file(srd_latency_output)
             
             # Print comparison summary in table format
             print("\nUDP Results:")
@@ -538,96 +308,78 @@ def run_tests(debug: bool = False) -> Dict:
             print("\n{:<30} {:<15} {:<15} {:<15}".format("METRIC", "ENI", "SRD", "DIFFERENCE"))
             print("-" * 75)
             
-            # Print metrics in table format
-            print("{:<30} {:<15} {:<15} {:<15}".format("Valid Duration - RunTime", 
-                                                     eni_metrics.get("runtime", "N/A"), 
-                                                     srd_metrics.get("runtime", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("Valid Duration - SentMessages", 
-                                                     eni_metrics.get("sent_messages", "N/A"), 
-                                                     srd_metrics.get("sent_messages", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("Valid Duration - ReceivedMessages", 
-                                                     eni_metrics.get("received_messages", "N/A"), 
-                                                     srd_metrics.get("received_messages", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("# dropped messages", 
-                                                     eni_metrics.get("dropped_messages", "N/A"), 
-                                                     srd_metrics.get("dropped_messages", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("# duplicated messages", 
-                                                     eni_metrics.get("duplicated_messages", "N/A"), 
-                                                     srd_metrics.get("duplicated_messages", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("# out-of-order messages", 
-                                                     eni_metrics.get("out_of_order_messages", "N/A"), 
-                                                     srd_metrics.get("out_of_order_messages", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("avg-latency", 
-                                                     f"{eni_metrics['avg_latency']} μs", 
-                                                     f"{srd_metrics['avg_latency']} μs", 
-                                                     avg_improvement_display))
-            print("{:<30} {:<15} {:<15} {:<15}".format("std-dev", 
-                                                     eni_metrics.get("std_dev", "N/A"), 
-                                                     srd_metrics.get("std_dev", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("mean-ad", 
-                                                     eni_metrics.get("mean_ad", "N/A"), 
-                                                     srd_metrics.get("mean_ad", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("median-ad", 
-                                                     eni_metrics.get("median_ad", "N/A"), 
-                                                     srd_metrics.get("median_ad", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("siqr", 
-                                                     eni_metrics.get("siqr", "N/A"), 
-                                                     srd_metrics.get("siqr", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("cv", 
-                                                     eni_metrics.get("cv", "N/A"), 
-                                                     srd_metrics.get("cv", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("std-error", 
-                                                     eni_metrics.get("std_error", "N/A"), 
-                                                     srd_metrics.get("std_error", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("MAX", 
-                                                     f"{eni_metrics['max_latency']} μs", 
-                                                     f"{srd_metrics['max_latency']} μs", 
-                                                     max_improvement_display))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P99.999", 
-                                                     eni_metrics.get("percentile_99999", "N/A"), 
-                                                     srd_metrics.get("percentile_99999", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P99.990", 
-                                                     eni_metrics.get("percentile_9999", "N/A"), 
-                                                     srd_metrics.get("percentile_9999", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P99.900", 
-                                                     eni_metrics.get("percentile_999", "N/A"), 
-                                                     srd_metrics.get("percentile_999", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P99.000", 
-                                                     f"{eni_metrics['percentile_99']} μs", 
-                                                     f"{srd_metrics['percentile_99']} μs", 
-                                                     p99_improvement_display))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P90.000", 
-                                                     eni_metrics.get("percentile_90", "N/A"), 
-                                                     srd_metrics.get("percentile_90", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P75.000", 
-                                                     eni_metrics.get("percentile_75", "N/A"), 
-                                                     srd_metrics.get("percentile_75", "N/A"), 
-                                                     "N/A"))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P50.000", 
-                                                     f"{eni_metrics['percentile_50']} μs", 
-                                                     f"{srd_metrics['percentile_50']} μs", 
-                                                     p50_improvement_display))
-            print("{:<30} {:<15} {:<15} {:<15}".format("P25.000", 
-                                                     eni_metrics.get("percentile_25", "N/A"), 
-                                                     srd_metrics.get("percentile_25", "N/A"), 
-                                                     "N/A"))
+            # Helper function to format metrics for display
+            def format_metric_row(name, eni_key, srd_key, add_unit=True):
+                eni_val = eni_metrics.get(eni_key, "N/A")
+                srd_val = srd_metrics.get(srd_key, "N/A")
+                
+                # Format values with μs if needed
+                if add_unit and eni_val != "N/A":
+                    eni_display = f"{eni_val} μs"
+                else:
+                    eni_display = eni_val
+                
+                if add_unit and srd_val != "N/A":
+                    srd_display = f"{srd_val} μs"
+                else:
+                    srd_display = srd_val
+                
+                # Calculate improvement
+                improvement = calculate_improvement(eni_val, srd_val)
+                if improvement is not None:
+                    diff_display = f"{improvement:.2f}%"
+                else:
+                    diff_display = "N/A"
+                
+                print("{:<30} {:<15} {:<15} {:<15}".format(name, eni_display, srd_display, diff_display))
+                return improvement
+            
+            # Print metrics
+            format_metric_row("Valid Duration - RunTime", "runtime", "runtime", False)
+            format_metric_row("Valid Duration - SentMessages", "sent_messages", "sent_messages", False)
+            format_metric_row("Valid Duration - ReceivedMessages", "received_messages", "received_messages", False)
+            format_metric_row("# dropped messages", "dropped_messages", "dropped_messages", False)
+            format_metric_row("# duplicated messages", "duplicated_messages", "duplicated_messages", False)
+            format_metric_row("# out-of-order messages", "out_of_order_messages", "out_of_order_messages", False)
+            
+            avg_improvement = format_metric_row("avg-latency", "avg_latency", "avg_latency")
+            format_metric_row("std-dev", "std_dev", "std_dev", False)
+            format_metric_row("mean-ad", "mean_ad", "mean_ad", False)
+            format_metric_row("median-ad", "median_ad", "median_ad", False)
+            format_metric_row("siqr", "siqr", "siqr", False)
+            format_metric_row("cv", "cv", "cv", False)
+            format_metric_row("std-error", "std_error", "std_error", False)
+            
+            max_improvement = format_metric_row("MAX", "max_latency", "max_latency")
+            format_metric_row("P99.999", "percentile_99999", "percentile_99999")
+            format_metric_row("P99.990", "percentile_9999", "percentile_9999")
+            format_metric_row("P99.900", "percentile_999", "percentile_999")
+            p99_improvement = format_metric_row("P99.000", "percentile_99", "percentile_99")
+            format_metric_row("P90.000", "percentile_90", "percentile_90")
+            format_metric_row("P75.000", "percentile_75", "percentile_75")
+            p50_improvement = format_metric_row("P50.000", "percentile_50", "percentile_50")
+            format_metric_row("P25.000", "percentile_25", "percentile_25")
+            
             print("-" * 75)
+            
+            # Log to ENI summary file
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(eni_summary_file, 'a') as f:
+                f.write(f"{i},{j},{timestamp},{CLIENT_IP_ENI},{CLIENT_PINGPONG_PORT_ENI},{SERVER_IP_ENI},{SERVER_PORT_ENI},UDP,{MPS},{eni_metrics.get('avg_latency', 'N/A')},{eni_metrics.get('min_latency', 'N/A')},{eni_metrics.get('max_latency', 'N/A')},{eni_metrics.get('percentile_50', 'N/A')},{eni_metrics.get('percentile_99', 'N/A')},{eni_metrics.get('percentile_999', 'N/A')}\n")
+            
+            # Log to SRD summary file
+            with open(srd_summary_file, 'a') as f:
+                f.write(f"{i},{j},{timestamp},{CLIENT_IP_SRD},{CLIENT_PINGPONG_PORT_SRD},{SERVER_IP_SRD},{SERVER_PORT_SRD},UDP,{MPS},{srd_metrics.get('avg_latency', 'N/A')},{srd_metrics.get('min_latency', 'N/A')},{srd_metrics.get('max_latency', 'N/A')},{srd_metrics.get('percentile_50', 'N/A')},{srd_metrics.get('percentile_99', 'N/A')},{srd_metrics.get('percentile_999', 'N/A')}\n")
+            
+            # Format improvement percentages for CSV
+            avg_imp_str = f"{avg_improvement:.2f}" if avg_improvement is not None else "N/A"
+            p50_imp_str = f"{p50_improvement:.2f}" if p50_improvement is not None else "N/A"
+            p99_imp_str = f"{p99_improvement:.2f}" if p99_improvement is not None else "N/A"
+            max_imp_str = f"{max_improvement:.2f}" if max_improvement is not None else "N/A"
+            
+            # Log to comparison file
+            with open(comparison_file, 'a') as f:
+                f.write(f"{i},{j},{timestamp},UDP,\"{eni_udp_5tuple}\",\"{srd_udp_5tuple}\",{eni_metrics.get('avg_latency', 'N/A')},{srd_metrics.get('avg_latency', 'N/A')},{eni_metrics.get('percentile_50', 'N/A')},{srd_metrics.get('percentile_50', 'N/A')},{eni_metrics.get('percentile_99', 'N/A')},{srd_metrics.get('percentile_99', 'N/A')},{eni_metrics.get('max_latency', 'N/A')},{srd_metrics.get('max_latency', 'N/A')},{avg_imp_str},{p50_imp_str},{p99_imp_str},{max_imp_str}\n")
             
             # Optional delay between repeats
             if j < REPEAT - 1:
@@ -645,246 +397,58 @@ def run_tests(debug: bool = False) -> Dict:
     print(f"Test ended at: {test_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 72)
     
-    # Generate summary report
+    # Generate summary report (only save to file, don't print to console)
     print("Tests completed. Generating summary report...")
-    
-    # Calculate averages from all results
-    if all_results:
-        udp_eni_avg = sum(float(r["eni_avg"]) for r in all_results if r["eni_avg"] != "N/A") / len(all_results)
-        udp_srd_avg = sum(float(r["srd_avg"]) for r in all_results if r["srd_avg"] != "N/A") / len(all_results)
-        udp_eni_p50 = sum(float(r["eni_p50"]) for r in all_results if r["eni_p50"] != "N/A") / len(all_results)
-        udp_srd_p50 = sum(float(r["srd_p50"]) for r in all_results if r["srd_p50"] != "N/A") / len(all_results)
-        udp_eni_p99 = sum(float(r["eni_p99"]) for r in all_results if r["eni_p99"] != "N/A") / len(all_results)
-        udp_srd_p99 = sum(float(r["srd_p99"]) for r in all_results if r["srd_p99"] != "N/A") / len(all_results)
-        udp_eni_max = sum(float(r["eni_max"]) for r in all_results if r["eni_max"] != "N/A") / len(all_results)
-        udp_srd_max = sum(float(r["srd_max"]) for r in all_results if r["srd_max"] != "N/A") / len(all_results)
-        
-        # Calculate overall improvement percentages
-        udp_avg_improvement = ((udp_eni_avg - udp_srd_avg) / udp_eni_avg) * 100 if udp_eni_avg > 0 else 0
-        udp_p50_improvement = ((udp_eni_p50 - udp_srd_p50) / udp_eni_p50) * 100 if udp_eni_p50 > 0 else 0
-        udp_p99_improvement = ((udp_eni_p99 - udp_srd_p99) / udp_eni_p99) * 100 if udp_eni_p99 > 0 else 0
-        udp_max_improvement = ((udp_eni_max - udp_srd_max) / udp_eni_max) * 100 if udp_eni_max > 0 else 0
-        
-        # Format for display
-        udp_avg_improvement_display = f"{udp_avg_improvement:.2f}%"
-        udp_p50_improvement_display = f"{udp_p50_improvement:.2f}%"
-        udp_p99_improvement_display = f"{udp_p99_improvement:.2f}%"
-        udp_max_improvement_display = f"{udp_max_improvement:.2f}%"
-    else:
-        udp_eni_avg = udp_srd_avg = udp_eni_p50 = udp_srd_p50 = 0
-        udp_eni_p99 = udp_srd_p99 = udp_eni_max = udp_srd_max = 0
-        udp_avg_improvement_display = udp_p50_improvement_display = "N/A"
-        udp_p99_improvement_display = udp_max_improvement_display = "N/A"
     
     # Create summary report
     summary_report = f"{output_dir}/summary_report.txt"
-    
-    # Create a pretty table for the summary report
-    table_width = 72
-    
     with open(summary_report, 'w') as f:
-        # Write header
-        header_lines = format_table_header("ENA vs ENA Express Performance Summary", table_width)
-        for line in header_lines:
-            f.write(f"{line}\n")
-            print(line)
+        f.write(f"ENA vs ENA Express Performance Summary\n")
+        f.write(f"Test Date: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Z %Y')}\n")
+        f.write(f"Test Start Time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Test End Time: {test_end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Total Iterations: {ITERATIONS}\n")
+        f.write(f"Repeats per Iteration: {REPEAT}\n")
+        f.write(f"Total Tests: {ITERATIONS * REPEAT}\n\n")
         
-        # Write test information
-        f.write(f"│ Test Date: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Z %Y')}{' ' * (table_width - 45)}│\n")
-        f.write(f"│ Test Start Time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}{' ' * (table_width - 47)}│\n")
-        f.write(f"│ Test End Time: {test_end_time.strftime('%Y-%m-%d %H:%M:%S')}{' ' * (table_width - 45)}│\n")
-        f.write(f"│ Total Iterations: {ITERATIONS}{' ' * (table_width - 22 - len(str(ITERATIONS)))}│\n")
-        f.write(f"│ Repeats per Iteration: {REPEAT}{' ' * (table_width - 26 - len(str(REPEAT)))}│\n")
-        f.write(f"│ Total Tests: {ITERATIONS * REPEAT}{' ' * (table_width - 16 - len(str(ITERATIONS * REPEAT)))}│\n")
+        f.write(f"Connection Details:\n")
+        f.write(f"Regular ENI:\n")
+        f.write(f"  Source IP: {CLIENT_IP_ENI}\n")
+        f.write(f"  Destination IP: {SERVER_IP_ENI}\n\n")
         
-        print(f"│ Test Date: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Z %Y')}{' ' * (table_width - 45)}│")
-        print(f"│ Test Start Time: {test_start_time.strftime('%Y-%m-%d %H:%M:%S')}{' ' * (table_width - 47)}│")
-        print(f"│ Test End Time: {test_end_time.strftime('%Y-%m-%d %H:%M:%S')}{' ' * (table_width - 45)}│")
-        print(f"│ Total Iterations: {ITERATIONS}{' ' * (table_width - 22 - len(str(ITERATIONS)))}│")
-        print(f"│ Repeats per Iteration: {REPEAT}{' ' * (table_width - 26 - len(str(REPEAT)))}│")
-        print(f"│ Total Tests: {ITERATIONS * REPEAT}{' ' * (table_width - 16 - len(str(ITERATIONS * REPEAT)))}│")
+        f.write(f"ENA Express:\n")
+        f.write(f"  Source IP: {CLIENT_IP_SRD}\n")
+        f.write(f"  Destination IP: {SERVER_IP_SRD}\n\n")
         
-        # Write connection details section
-        section_lines = format_table_section("Connection Details", table_width)
-        for line in section_lines:
-            f.write(f"{line}\n")
-            print(line)
-        
-        f.write(f"│ Regular ENI:{' ' * (table_width - 14)}│\n")
-        f.write(f"│   Source IP: {CLIENT_IP_ENI}{' ' * (table_width - 15 - len(CLIENT_IP_ENI))}│\n")
-        f.write(f"│   Destination IP: {SERVER_IP_ENI}{' ' * (table_width - 20 - len(SERVER_IP_ENI))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
-        f.write(f"│ ENA Express:{' ' * (table_width - 14)}│\n")
-        f.write(f"│   Source IP: {CLIENT_IP_SRD}{' ' * (table_width - 15 - len(CLIENT_IP_SRD))}│\n")
-        f.write(f"│   Destination IP: {SERVER_IP_SRD}{' ' * (table_width - 20 - len(SERVER_IP_SRD))}│\n")
-        
-        print(f"│ Regular ENI:{' ' * (table_width - 14)}│")
-        print(f"│   Source IP: {CLIENT_IP_ENI}{' ' * (table_width - 15 - len(CLIENT_IP_ENI))}│")
-        print(f"│   Destination IP: {SERVER_IP_ENI}{' ' * (table_width - 20 - len(SERVER_IP_ENI))}│")
-        print(f"│{' ' * (table_width - 2)}│")
-        print(f"│ ENA Express:{' ' * (table_width - 14)}│")
-        print(f"│   Source IP: {CLIENT_IP_SRD}{' ' * (table_width - 15 - len(CLIENT_IP_SRD))}│")
-        print(f"│   Destination IP: {SERVER_IP_SRD}{' ' * (table_width - 20 - len(SERVER_IP_SRD))}│")
-        
-        # Write UDP Ping-Pong (Latency) Results section
-        section_lines = format_table_section("UDP Ping-Pong (Latency) Results", table_width)
-        for line in section_lines:
-            f.write(f"{line}\n")
-            print(line)
-        
-        # Format UDP latency results with colors based on improvement
-        # For latency metrics, negative improvement (red) is bad, positive (green) is good
-        
-        # Average Latency
-        f.write(f"│ Average Latency:{' ' * (table_width - 18)}│\n")
-        f.write(f"│   Regular ENI: {udp_eni_avg:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_avg:.3f}'))}│\n")
-        f.write(f"│   ENA Express: {udp_srd_avg:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_avg:.3f}'))}│\n")
-        
-        if udp_avg_improvement >= 0:
-            improvement_color = Colors.GREEN
-        else:
-            improvement_color = Colors.RED
-        
-        f.write(f"│   Difference: {improvement_color}{udp_avg_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_avg_improvement_display))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
-        
-        print(f"│ Average Latency:{' ' * (table_width - 18)}│")
-        print(f"│   Regular ENI: {udp_eni_avg:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_avg:.3f}'))}│")
-        print(f"│   ENA Express: {udp_srd_avg:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_avg:.3f}'))}│")
-        
-        if udp_avg_improvement >= 0:
-            print(f"│   Difference: {Colors.GREEN}{udp_avg_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_avg_improvement_display))}│")
-        else:
-            print(f"│   Difference: {Colors.RED}{udp_avg_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_avg_improvement_display))}│")
-        
-        print(f"│{' ' * (table_width - 2)}│")
-        
-        # p50 Latency
-        f.write(f"│ p50 Latency:{' ' * (table_width - 14)}│\n")
-        f.write(f"│   Regular ENI: {udp_eni_p50:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_p50:.3f}'))}│\n")
-        f.write(f"│   ENA Express: {udp_srd_p50:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_p50:.3f}'))}│\n")
-        
-        if udp_p50_improvement >= 0:
-            improvement_color = Colors.GREEN
-        else:
-            improvement_color = Colors.RED
-        
-        f.write(f"│   Difference: {improvement_color}{udp_p50_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p50_improvement_display))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
-        
-        print(f"│ p50 Latency:{' ' * (table_width - 14)}│")
-        print(f"│   Regular ENI: {udp_eni_p50:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_p50:.3f}'))}│")
-        print(f"│   ENA Express: {udp_srd_p50:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_p50:.3f}'))}│")
-        
-        if udp_p50_improvement >= 0:
-            print(f"│   Difference: {Colors.GREEN}{udp_p50_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p50_improvement_display))}│")
-        else:
-            print(f"│   Difference: {Colors.RED}{udp_p50_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p50_improvement_display))}│")
-        
-        print(f"│{' ' * (table_width - 2)}│")
-        
-        # p99 Latency
-        f.write(f"│ p99 Latency:{' ' * (table_width - 14)}│\n")
-        f.write(f"│   Regular ENI: {udp_eni_p99:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_p99:.3f}'))}│\n")
-        f.write(f"│   ENA Express: {udp_srd_p99:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_p99:.3f}'))}│\n")
-        
-        if udp_p99_improvement >= 0:
-            improvement_color = Colors.GREEN
-        else:
-            improvement_color = Colors.RED
-        
-        f.write(f"│   Difference: {improvement_color}{udp_p99_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p99_improvement_display))}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
-        
-        print(f"│ p99 Latency:{' ' * (table_width - 14)}│")
-        print(f"│   Regular ENI: {udp_eni_p99:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_p99:.3f}'))}│")
-        print(f"│   ENA Express: {udp_srd_p99:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_p99:.3f}'))}│")
-        
-        if udp_p99_improvement >= 0:
-            print(f"│   Difference: {Colors.GREEN}{udp_p99_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p99_improvement_display))}│")
-        else:
-            print(f"│   Difference: {Colors.RED}{udp_p99_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_p99_improvement_display))}│")
-        
-        print(f"│{' ' * (table_width - 2)}│")
-        
-        # Maximum Latency
-        f.write(f"│ Maximum Latency:{' ' * (table_width - 18)}│\n")
-        f.write(f"│   Regular ENI: {udp_eni_max:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_max:.3f}'))}│\n")
-        f.write(f"│   ENA Express: {udp_srd_max:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_max:.3f}'))}│\n")
-        
-        if udp_max_improvement >= 0:
-            improvement_color = Colors.GREEN
-        else:
-            improvement_color = Colors.RED
-        
-        f.write(f"│   Difference: {improvement_color}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_max_improvement_display))}│\n")
-        
-        print(f"│ Maximum Latency:{' ' * (table_width - 18)}│")
-        print(f"│   Regular ENI: {udp_eni_max:.3f} μs{' ' * (table_width - 22 - len(f'{udp_eni_max:.3f}'))}│")
-        print(f"│   ENA Express: {udp_srd_max:.3f} μs{' ' * (table_width - 22 - len(f'{udp_srd_max:.3f}'))}│")
-        
-        if udp_max_improvement >= 0:
-            print(f"│   Difference: {Colors.GREEN}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_max_improvement_display))}│")
-        else:
-            print(f"│   Difference: {Colors.RED}{udp_max_improvement_display}{Colors.ENDC}{' ' * (table_width - 15 - len(udp_max_improvement_display))}│")
-        
-        # Write footer directly after the latency results
-        
-        # Write footer
-        footer = format_table_section(f"Results saved in: {output_dir}", table_width)
-        for line in footer[:-1]:  # Skip the last line which is a section separator
-            f.write(f"{line}\n")
-            print(line)
-        
-        # Write final footer
-        f.write(f"{format_table_footer(table_width)}\n")
-        print(format_table_footer(table_width))
+        f.write(f"Results saved in: {output_dir}\n")
     
     # Create a 5-tuple summary file
     tuple_summary = f"{output_dir}/5tuple_summary.txt"
-    
     with open(tuple_summary, 'w') as f:
-        # Write header
-        header_lines = format_table_header("5-Tuple Connection Details", table_width)
-        for line in header_lines:
-            f.write(f"{line}\n")
+        f.write(f"5-Tuple Connection Details\n\n")
         
-        # Write Regular ENI UDP details
-        f.write(f"│ Regular ENI UDP:{' ' * (table_width - 18)}│\n")
-        f.write(f"│   Source IP: {CLIENT_IP_ENI}{' ' * (table_width - 15 - len(CLIENT_IP_ENI))}│\n")
-        f.write(f"│   Source Port: {CLIENT_PINGPONG_PORT_ENI}{' ' * (table_width - 16 - len(str(CLIENT_PINGPONG_PORT_ENI)))}│\n")
-        f.write(f"│   Destination IP: {SERVER_IP_ENI}{' ' * (table_width - 20 - len(SERVER_IP_ENI))}│\n")
-        f.write(f"│   Destination Port: {SERVER_PORT_ENI}{' ' * (table_width - 22 - len(str(SERVER_PORT_ENI)))}│\n")
-        f.write(f"│   Protocol: UDP{' ' * (table_width - 16)}│\n")
-        f.write(f"│{' ' * (table_width - 2)}│\n")
+        f.write(f"Regular ENI UDP:\n")
+        f.write(f"  Source IP: {CLIENT_IP_ENI}\n")
+        f.write(f"  Source Port: {CLIENT_PINGPONG_PORT_ENI}\n")
+        f.write(f"  Destination IP: {SERVER_IP_ENI}\n")
+        f.write(f"  Destination Port: {SERVER_PORT_ENI}\n")
+        f.write(f"  Protocol: UDP\n\n")
         
-        # Write ENA Express UDP details
-        f.write(f"│ ENA Express UDP:{' ' * (table_width - 18)}│\n")
-        f.write(f"│   Source IP: {CLIENT_IP_SRD}{' ' * (table_width - 15 - len(CLIENT_IP_SRD))}│\n")
-        f.write(f"│   Source Port: {CLIENT_PINGPONG_PORT_SRD}{' ' * (table_width - 16 - len(str(CLIENT_PINGPONG_PORT_SRD)))}│\n")
-        f.write(f"│   Destination IP: {SERVER_IP_SRD}{' ' * (table_width - 20 - len(SERVER_IP_SRD))}│\n")
-        f.write(f"│   Destination Port: {SERVER_PORT_SRD}{' ' * (table_width - 22 - len(str(SERVER_PORT_SRD)))}│\n")
-        f.write(f"│   Protocol: UDP{' ' * (table_width - 16)}│\n")
+        f.write(f"ENA Express UDP:\n")
+        f.write(f"  Source IP: {CLIENT_IP_SRD}\n")
+        f.write(f"  Source Port: {CLIENT_PINGPONG_PORT_SRD}\n")
+        f.write(f"  Destination IP: {SERVER_IP_SRD}\n")
+        f.write(f"  Destination Port: {SERVER_PORT_SRD}\n")
+        f.write(f"  Protocol: UDP\n\n")
         
-        # Write footer
-        footer = format_table_section("Note: Each test uses fixed source ports", table_width)
-        for line in footer[:-1]:  # Skip the last line which is a section separator
-            f.write(f"{line}\n")
-        
-        # Write final footer
-        f.write(f"{format_table_footer(table_width)}\n")
-    
-    print("\n5-Tuple Connection Details:")
-    with open(tuple_summary, 'r') as f:
-        print(f.read())
+        f.write(f"Note: Each test uses fixed source ports\n")
     
     print("Test completed successfully!")
     
     return {
         "output_dir": output_dir,
         "summary_report": summary_report,
-        "tuple_summary": tuple_summary,
-        "all_results": all_results
+        "tuple_summary": tuple_summary
     }
 
 def main():
