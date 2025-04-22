@@ -120,7 +120,7 @@ The project uses Pulumi with TypeScript, which offers several advantages:
 
 #### Project Structure
 
-The project is organized into three separate Pulumi stacks:
+The project is organized into four separate Pulumi stacks:
 
 ```
 pulumi/
@@ -141,6 +141,15 @@ pulumi/
 │       ├── index.ts         # Main entry point
 │       ├── config.ts        # Configuration handling
 │       └── compute.ts       # EC2 instances, ENIs with ENA Express
+│
+├── compute-dedicated-host-stack/  # Dedicated Host stack
+│   ├── Pulumi.yaml          # Stack configuration
+│   ├── package.json         # Dependencies
+│   ├── tsconfig.json        # TypeScript configuration
+│   └── src/
+│       ├── index.ts         # Main entry point
+│       ├── config.ts        # Configuration handling
+│       └── dedicated-host.ts # Dedicated Host and EC2 instances
 │
 └── monitoring-stack/        # Monitoring infrastructure stack
     ├── Pulumi.yaml          # Stack configuration
@@ -197,6 +206,9 @@ The stacks have the following dependencies:
 
    # Deploy only the compute stack
    ./deploy.sh 123456789012 us-east-1 --compute-ena-express
+
+   # Deploy only the dedicated host stack
+   ./deploy.sh 123456789012 us-east-1 --compute-dedicated-host
 
    # Deploy only the monitoring stack
    ./deploy.sh 123456789012 us-east-1 --monitoring
@@ -556,9 +568,10 @@ The project has been updated with the following improvements:
 
 #### 1. Multi-Stack Architecture
 
-- Refactored the project into three separate Pulumi stacks:
+- Refactored the project into four separate Pulumi stacks:
   - **Network Stack**: VPC, subnets, security groups, etc.
   - **EC2 ENA Express Stack**: EC2 instances, ENIs, placement group
+  - **Compute Dedicated Host Stack**: Dedicated host with EC2 instances
   - **Monitoring Stack**: Prometheus, Grafana, ECR repository
 
 - Added stack references to share outputs between stacks:
@@ -613,6 +626,15 @@ The project has been updated with the following improvements:
 - Added proper ordering for policy attachments and role deletion
 - Implemented safeguards to prevent deletion failures
 
+#### 8. Dedicated Host Stack
+
+- Added a new stack for testing with EC2 Dedicated Hosts
+- Created a dedicated host with c6i instance family (configurable)
+- Deployed two c6i.16xlarge instances on the dedicated host
+- Created a new subnet with CIDR block 192.168.6.0/24
+- Used Systems Manager State Manager to install sockperf on the instances
+- Configured security groups to allow sockperf traffic between instances
+
 ## Cleanup
 
 To avoid ongoing charges, clean up the infrastructure when testing is complete:
@@ -635,6 +657,7 @@ You can destroy the Pulumi stacks using the deployment script:
 # Destroy specific stacks
 ./deploy.sh <account-id> <region> --monitoring destroy
 ./deploy.sh <account-id> <region> --compute-ena-express destroy
+./deploy.sh <account-id> <region> --compute-dedicated-host destroy
 ./deploy.sh <account-id> <region> --network destroy
 ```
 
