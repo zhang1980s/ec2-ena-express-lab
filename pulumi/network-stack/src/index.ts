@@ -14,3 +14,4 @@ const networking = new Networking("networking", {
 export const vpcId = networking.vpc.id;
 export const subnetIds = pulumi.output(networking.subnets).apply(subnets => subnets.map(subnet => subnet.id));
 export const securityGroupId = networking.securityGroup.id;
+export const routeTableId = networking.routeTable.id;
