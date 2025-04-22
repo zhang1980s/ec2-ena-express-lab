@@ -97,9 +97,9 @@ sockperf server -i 192.168.3.10 -p 11110
 sockperf server -i 192.168.3.11 -p 11111
 ```
 
-### Run the ena_express_latency_benchmark.sh on sockperf-client
+### Run the ena_express_latency_benchmark.py on sockperf-client
 ```bash
-./ena_express_latency_benchmark.sh [--debug]
+python3 ena_express_latency_benchmark.py [options]
 ```
 
 ### Pulumi Implementation
@@ -218,7 +218,7 @@ The stacks have the following dependencies:
 5. Transfer the testing scripts to your EC2 instances using SCP or AWS Systems Manager:
    ```bash
    # Example using SCP
-   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/ena_express_latency_benchmark.sh ec2-user@[instance-ip]:/home/ec2-user/
+   scp -i /path/to/keypair-sandbox0-sin-mymac.pem scripts/ena_express_latency_benchmark.py ec2-user@[instance-ip]:/home/ec2-user/
    ```
 
 6. Connect to the instances using SSH or Systems Manager:
@@ -262,9 +262,9 @@ This should display the installed version of sockperf (3.10).
 
 You can run the performance tests using the provided scripts or manually with sockperf commands.
 
-#### Using the ENA Express Latency Benchmark Script
+#### Using the ENA Express Latency Benchmark Python Script
 
-The `ena_express_latency_benchmark.sh` script is a specialized tool for comparing UDP latency performance between standard ENA and ENA Express:
+The `ena_express_latency_benchmark.py` script is a specialized tool for comparing UDP latency performance between standard ENA and ENA Express:
 
 ```bash
 # Run the sockperf server on sockperf-server
@@ -275,12 +275,20 @@ sockperf server -i 192.168.3.10 -p 11110
 ## on second terminal
 sockperf server -i 192.168.3.11 -p 11111
 
-# Run the ena_express_latency_benchmark.sh on sockperf-client
-./ena_express_latency_benchmark.sh [--debug]
+# Run the ena_express_latency_benchmark.py on sockperf-client
+python3 ena_express_latency_benchmark.py [options]
 ```
 
+Available options:
+- `--debug`: Enable debug output
+- `--iterations N`: Number of test iterations (default: 1)
+- `--repeat N`: Number of repeats per iteration (default: 1)
+- `--duration N`: Test duration in seconds (default: 30)
+- `--pre-warm-wait N`: Pre-warmup wait time in seconds (default: 3)
+- `--mps VALUE`: Messages per second (default: "max")
+
 Key features:
-- Runs parallel UDP tests between standard ENA and ENA Express interfaces
+- Runs parallel UDP tests between standard ENA and ENA Express interfaces using Python's concurrent.futures
 - Performs multiple iterations and repeats for statistical significance
 - Calculates improvement percentages between ENA and ENA Express
 - Generates comprehensive summary reports with detailed metrics
