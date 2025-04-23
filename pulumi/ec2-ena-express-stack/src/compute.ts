@@ -10,6 +10,7 @@ export interface ComputeArgs {
     instanceType: string;
     keyPairName: string;
     instanceCount: number;
+    placementGroupStrategy: string;
 }
 
 export class Compute extends pulumi.ComponentResource {
@@ -24,7 +25,7 @@ export class Compute extends pulumi.ComponentResource {
 
         // Create placement group
         this.placementGroup = new aws.ec2.PlacementGroup(`${name}-pg`, {
-            strategy: "spread",
+            strategy: args.placementGroupStrategy,
             tags: {
                 Name: `${args.stackName}-placement-group`,
             },

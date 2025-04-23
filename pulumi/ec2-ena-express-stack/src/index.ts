@@ -18,6 +18,7 @@ const compute = new Compute("compute", {
     instanceType: computeConfig.instanceType,
     keyPairName: computeConfig.keyPairName,
     instanceCount: computeConfig.instanceCount,
+    placementGroupStrategy: computeConfig.placementGroupStrategy,
 });
 
 // Since we're using user data scripts for software installation,

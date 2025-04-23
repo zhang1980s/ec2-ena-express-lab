@@ -11,6 +11,7 @@ export interface ComputeConfig {
     instanceType: string;
     keyPairName: string;
     instanceCount: number;
+    placementGroupStrategy: string;
     
     // Network stack reference
     networkStackName: string;
@@ -22,6 +23,7 @@ const defaultConfig: ComputeConfig = {
     instanceType: "c7i.16xlarge",
     keyPairName: "keypair-sandbox0-iad",
     instanceCount: 2,
+    placementGroupStrategy: "spread",
     networkStackName: "dev",
 };
 
@@ -31,5 +33,6 @@ export const computeConfig: ComputeConfig = {
     instanceType: config.get("instanceType") ?? defaultConfig.instanceType,
     keyPairName: config.get("keyPairName") ?? defaultConfig.keyPairName,
     instanceCount: config.getNumber("instanceCount") ?? defaultConfig.instanceCount,
+    placementGroupStrategy: config.get("placementGroupStrategy") ?? defaultConfig.placementGroupStrategy,
     networkStackName: config.get("networkStackName") ?? defaultConfig.networkStackName,
 };
