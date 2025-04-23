@@ -198,9 +198,9 @@ log "node_exporter installation complete!"
 log "Starting benchmark script download"
 
 # Define variables
-SCRIPT_URL="https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/zhang1980s/ec2-ena-express-lab/master/scripts/ena_express_latency_benchmark.py"
 DEST_DIR="/home/ec2-user"
-SCRIPT_NAME="ena_express_latency_benchmark.sh"
+SCRIPT_NAME="ena_express_latency_benchmark.py"
 FULL_PATH="$DEST_DIR/$SCRIPT_NAME"
 STATUS_FILE="$DEST_DIR/.$SCRIPT_NAME.status"
 
