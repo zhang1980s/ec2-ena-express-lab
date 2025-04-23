@@ -1,3 +1,0 @@
-name: ec2-dedicated-host
-runtime: nodejs
-description: Dedicated Host infrastructure for ENA Express latency performance testing
