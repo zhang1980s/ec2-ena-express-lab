@@ -192,9 +192,10 @@ ${specificScript}
                 dependsOn: [secondaryEniAttachment],
             });
             
-            // Associate the Elastic IP with the instance
+            // Associate the Elastic IP with the instance's primary network interface
+            // When an instance has multiple network interfaces, we must specify which one to associate the EIP with
             const eipAssociation = new aws.ec2.EipAssociation(`${name}-eip-assoc-${i+1}`, {
-                instanceId: instance.id,
+                networkInterfaceId: instance.primaryNetworkInterfaceId,
                 allocationId: eip.id,
             }, { 
                 parent: this,
