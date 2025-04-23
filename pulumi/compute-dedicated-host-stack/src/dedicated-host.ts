@@ -43,7 +43,7 @@ export class DedicatedHost extends pulumi.ComponentResource {
         const routeTableAssociation = new aws.ec2.RouteTableAssociation(`${name}-rt-assoc`, {
             subnetId: this.subnet.id,
             routeTableId: args.routeTableId,
-        }, { parent: this });
+        } as any, { parent: this });
         
         // Create security group
         this.securityGroup = new aws.ec2.SecurityGroup(`${name}-sg`, {
