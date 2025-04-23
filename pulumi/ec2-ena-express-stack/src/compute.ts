@@ -181,6 +181,9 @@ ${specificScript}
                 ],
                 userData: Buffer.from(userData).toString('base64'),
                 iamInstanceProfile: instanceProfile.name,
+                cpuOptions: {
+                    threadsPerCore: 1,  // Set 1 thread per core (disable hyperthreading)
+                },
                 tags: {
                     Name: `${args.stackName}-${config.name}`,
                 },
