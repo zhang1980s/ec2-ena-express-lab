@@ -15,7 +15,6 @@ export interface ComputeArgs {
 export class Compute extends pulumi.ComponentResource {
     public readonly placementGroup: aws.ec2.PlacementGroup;
     public readonly instances: aws.ec2.Instance[];
-    public readonly primaryEnis: aws.ec2.NetworkInterface[];
     public readonly secondaryEnis: aws.ec2.NetworkInterface[];
     public readonly instanceRole: aws.iam.Role;
     public readonly elasticIps: aws.ec2.Eip[];
@@ -76,7 +75,6 @@ export class Compute extends pulumi.ComponentResource {
 
         // Create instances and ENIs
         this.instances = [];
-        this.primaryEnis = [];
         this.secondaryEnis = [];
         this.elasticIps = [];
 
@@ -102,18 +100,6 @@ export class Compute extends pulumi.ComponentResource {
         for (let i = 0; i < instanceConfigs.length; i++) {
             const config = instanceConfigs[i];
             
-            // Create the primary network interface with fixed IP
-            const primaryEni = new aws.ec2.NetworkInterface(`${name}-primary-eni-${i+1}`, {
-                subnetId: args.subnetId,
-                securityGroups: [args.securityGroupId],
-                privateIps: [config.primaryIp],
-                description: `Primary ENI for ${config.name}`,
-                tags: {
-                    Name: `${args.stackName}-${config.name}-primary-eni`,
-                },
-            }, { parent: this });
-            this.primaryEnis.push(primaryEni);
-            
             // Create an Elastic IP for this instance
             const eip = new aws.ec2.Eip(`${name}-eip-${i+1}`, {
                 domain: "vpc",
@@ -123,11 +109,7 @@ export class Compute extends pulumi.ComponentResource {
             }, { parent: this });
             this.elasticIps.push(eip);
             
-            // Associate the Elastic IP with the primary ENI
-            const eipAssociation = new aws.ec2.EipAssociation(`${name}-eip-assoc-${i+1}`, {
-                networkInterfaceId: primaryEni.id,
-                allocationId: eip.id,
-            }, { parent: this });
+            // We'll associate the Elastic IP with the instance after it's created
 
             // Create the secondary network interface with fixed IP
             const secondaryEni = new aws.ec2.NetworkInterface(`${name}-secondary-eni-${i+1}`, {
@@ -173,12 +155,11 @@ ${specificScript}
                 instanceType: args.instanceType,
                 placementGroup: this.placementGroup.id,
                 keyName: args.keyPairName,
-                networkInterfaces: [
-                    {
-                        networkInterfaceId: primaryEni.id,
-                        deviceIndex: 0,
-                    },
-                ],
+                // Use subnet_id and security_groups instead of networkInterfaces
+                // This allows the instance to be replaced without the "network interface in use" error
+                subnetId: args.subnetId,
+                vpcSecurityGroupIds: [args.securityGroupId],
+                privateIp: config.primaryIp,
                 userData: Buffer.from(userData).toString('base64'),
                 iamInstanceProfile: instanceProfile.name,
                 cpuOptions: {
@@ -209,6 +190,15 @@ ${specificScript}
                 parent: this,
                 dependsOn: [secondaryEniAttachment],
             });
+            
+            // Associate the Elastic IP with the instance
+            const eipAssociation = new aws.ec2.EipAssociation(`${name}-eip-assoc-${i+1}`, {
+                instanceId: instance.id,
+                allocationId: eip.id,
+            }, { 
+                parent: this,
+                dependsOn: [instance],
+            });
         }
 
         // Create an output that displays the instance names and their Elastic IPs
@@ -230,7 +220,6 @@ ${specificScript}
         this.registerOutputs({
             placementGroupId: this.placementGroup.id,
             instanceIds: pulumi.output(this.instances).apply(instances => instances.map(instance => instance.id)),
-            primaryEniIds: pulumi.output(this.primaryEnis).apply(enis => enis.map(eni => eni.id)),
             secondaryEniIds: pulumi.output(this.secondaryEnis).apply(enis => enis.map(eni => eni.id)),
             instancePublicIps: pulumi.output(this.instances).apply(instances => instances.map((instance, i) => ({ 
                 name: instanceConfigs[i].name,
