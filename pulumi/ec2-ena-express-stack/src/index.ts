@@ -52,9 +52,7 @@ export const instanceElasticIps = pulumi.output(compute.elasticIps).apply(eips =
     });
     return result;
 });
-export const primaryEniIds = pulumi.output(compute.primaryEnis).apply(enis => 
-    enis.map((eni, i) => ({ [`${instanceNames[i]}-primary`]: eni.id }))
-);
+// Primary ENIs are no longer created separately, they're part of the instance
 export const secondaryEniIds = pulumi.output(compute.secondaryEnis).apply(enis => 
     enis.map((eni, i) => ({ [`${instanceNames[i]}-secondary`]: eni.id }))
 );
