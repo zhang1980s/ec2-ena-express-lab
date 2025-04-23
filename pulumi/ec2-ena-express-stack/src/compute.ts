@@ -61,7 +61,7 @@ export class Compute extends pulumi.ComponentResource {
             filters: [
                 {
                     name: "name",
-                    values: ["al2023-ami-*-x86_64"],
+                    values: ["al2023-ami-2023*-x86_64"],
                 },
                 {
                     name: "root-device-type",
@@ -164,6 +164,7 @@ ${specificScript}
                 userData: Buffer.from(userData).toString('base64'),
                 iamInstanceProfile: instanceProfile.name,
                 cpuOptions: {
+                    coreCount: 32,      // Explicitly specify the number of cores
                     threadsPerCore: 1,  // Set 1 thread per core (disable hyperthreading)
                 },
                 tags: {
