@@ -9,7 +9,6 @@ show_usage() {
     echo 1>&2 "  --stack <name>       Use a specific stack name (default: dev)"
     echo 1>&2 "  --network            Deploy only the network stack"
     echo 1>&2 "  --compute-ena-express Deploy only the compute stack"
-    echo 1>&2 "  --compute-dedicated-host Deploy only the dedicated host stack"
     echo 1>&2 "  --monitoring         Deploy only the monitoring stack"
     echo 1>&2 "  --all                Deploy all stacks (default)"
     echo 1>&2 "  destroy              Destroy the specified stack(s) instead of deploying"
@@ -18,7 +17,6 @@ show_usage() {
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1                             # Deploy all stacks"
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --network                   # Deploy only network stack"
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --compute-ena-express       # Deploy only compute stack"
-    echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --compute-dedicated-host    # Deploy only dedicated host stack"
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --monitoring                # Deploy only monitoring stack"
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --all destroy               # Destroy all stacks"
     echo 1>&2 "  ./deploy.sh 123456789012 us-east-1 --network destroy           # Destroy network stack"
@@ -42,7 +40,6 @@ shift; shift
 STACK_NAME="dev"
 DEPLOY_NETWORK=false
 DEPLOY_COMPUTE=false
-DEPLOY_DEDICATED_HOST=false
 DEPLOY_MONITORING=false
 DEPLOY_ALL=true
 DESTROY=false
@@ -64,11 +61,6 @@ while [[ $# -gt 0 ]]; do
             DEPLOY_ALL=false
             shift
             ;;
-        --compute-dedicated-host)
-            DEPLOY_DEDICATED_HOST=true
-            DEPLOY_ALL=false
-            shift
-            ;;
         --monitoring)
             DEPLOY_MONITORING=true
             DEPLOY_ALL=false
@@ -78,7 +70,6 @@ while [[ $# -gt 0 ]]; do
             DEPLOY_ALL=true
             DEPLOY_NETWORK=false
             DEPLOY_COMPUTE=false
-            DEPLOY_DEDICATED_HOST=false
             DEPLOY_MONITORING=false
             shift
             ;;
@@ -130,12 +121,6 @@ deploy_or_destroy_stack() {
         # Get the organization name
         ORG_NAME=$(pulumi whoami)
         echo "Organization name: $ORG_NAME"
-    elif [[ "$stack_name" == "ec2-dedicated-host" ]]; then
-        echo "Setting network stack reference..."
-        pulumi config set networkStackName $STACK_NAME
-        # Get the organization name
-        ORG_NAME=$(pulumi whoami)
-        echo "Organization name: $ORG_NAME"
     elif [[ "$stack_name" == "ec2-ena-express-monitoring" ]]; then
         echo "Setting network and compute stack references..."
         pulumi config set networkStackName $STACK_NAME
@@ -165,10 +150,6 @@ fi
 
 if [ "$DEPLOY_ALL" = true ] || [ "$DEPLOY_COMPUTE" = true ]; then
     deploy_or_destroy_stack "pulumi/ec2-ena-express-stack" "ec2-ena-express-compute"
-fi
-
-if [ "$DEPLOY_ALL" = true ] || [ "$DEPLOY_DEDICATED_HOST" = true ]; then
-    deploy_or_destroy_stack "pulumi/compute-dedicated-host-stack" "ec2-dedicated-host"
 fi
 
 if [ "$DEPLOY_ALL" = true ] || [ "$DEPLOY_MONITORING" = true ]; then
